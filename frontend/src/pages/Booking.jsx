@@ -95,6 +95,7 @@ function Booking() {
         date: form.date,
         day: form.day,
         time: form.time,
+        type: "In-Person",
       },
     });
   };

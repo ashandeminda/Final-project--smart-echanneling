@@ -4,13 +4,41 @@ import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
 import { useAuth } from "../context/useAuth";
 
+const APPOINTMENT_BOOKING_STORAGE_KEY = "appointment-payment-booking";
+
+const formatAppointmentDate = (dateValue) => {
+  if (!dateValue) {
+    return "-";
+  }
+
+  const parsedDate = new Date(dateValue);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return dateValue;
+  }
+
+  return parsedDate.toLocaleDateString("en-CA", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+};
+
+const getStoredBookingData = () => {
+  try {
+    const stored = sessionStorage.getItem(APPOINTMENT_BOOKING_STORAGE_KEY);
+    return stored ? JSON.parse(stored) : {};
+  } catch {
+    return {};
+  }
+};
+
 function AppointmentPayment() {
   const navigate = useNavigate();
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
 
-  const bookingData = location.state || {};
+  const bookingData = location.state || getStoredBookingData();
   const stripeSessionId = searchParams.get("session_id");
   const isCancelled = searchParams.get("cancelled") === "true";
 
@@ -19,6 +47,12 @@ function AppointmentPayment() {
   const [error, setError] = useState("");
   const [successData, setSuccessData] = useState(null);
   const [appointmentNumber, setAppointmentNumber] = useState(null);
+
+  useEffect(() => {
+    if (location.state && Object.keys(location.state).length > 0) {
+      sessionStorage.setItem(APPOINTMENT_BOOKING_STORAGE_KEY, JSON.stringify(location.state));
+    }
+  }, [location.state]);
 
   useEffect(() => {
     if (stripeSessionId) {
@@ -53,6 +87,12 @@ function AppointmentPayment() {
       setAppointmentNumber(null);
     }
   }, [bookingData.date, bookingData.doctorId, stripeSessionId]);
+
+  useEffect(() => {
+    if (successData) {
+      sessionStorage.removeItem(APPOINTMENT_BOOKING_STORAGE_KEY);
+    }
+  }, [successData]);
 
   const handlePayment = async () => {
     if (!isAuthenticated) {
@@ -106,6 +146,17 @@ function AppointmentPayment() {
   }
 
   if (successData) {
+    const appointment = successData.appointment || {};
+    const appointmentPayload = successData.payload || {};
+    const appointmentNo = appointment.appointmentNo || "N/A";
+    const appointmentDate = appointment.date || appointmentPayload.date || bookingData.date || "";
+    const appointmentTime = appointment.time || appointmentPayload.time || bookingData.time || "";
+    const appointmentType = appointment.type || appointmentPayload.type || bookingData.type || "In-Person";
+    const appointmentDoctor = appointmentPayload.doctor || bookingData.doctor || "Doctor";
+    const appointmentHospital = appointmentPayload.hospital || bookingData.hospital || "Hospital";
+    const appointmentDay = bookingData.day || "";
+    const appointmentFee = Number(bookingData.fee || 0);
+
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
         <div className="bg-white border border-emerald-200 rounded-3xl p-8 shadow-sm max-w-lg w-full text-center">
@@ -117,22 +168,47 @@ function AppointmentPayment() {
             Your Stripe payment was successful and the appointment has been created.
           </p>
 
-          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left mb-6 space-y-3">
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500 text-sm font-semibold">Appointment No</span>
-              <strong className="text-slate-900">{successData.appointment?.appointmentNo || "N/A"}</strong>
+          <div className="bg-slate-50 border border-slate-200 rounded-2xl p-5 text-left mb-6">
+            <div className="flex items-center justify-between gap-4 pb-4 mb-4 border-b border-slate-200">
+              <div>
+                <p className="text-slate-500 text-xs font-bold uppercase tracking-[0.18em]">Appointment Details</p>
+                <h3 className="text-slate-900 text-lg font-bold mt-1">{appointmentDoctor}</h3>
+                <p className="text-slate-500 text-sm mt-1">{appointmentHospital}</p>
+              </div>
+              <div className="text-right">
+                <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-bold uppercase tracking-wider">
+                  Confirmed
+                </span>
+                <p className="text-slate-400 text-xs font-semibold mt-2">No. {appointmentNo}</p>
+              </div>
             </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500 text-sm font-semibold">Date</span>
-              <strong className="text-slate-900">{successData.appointment?.date || "-"}</strong>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500 text-sm font-semibold">Time</span>
-              <strong className="text-slate-900">{successData.appointment?.time || "-"}</strong>
-            </div>
-            <div className="flex justify-between gap-4">
-              <span className="text-slate-500 text-sm font-semibold">Type</span>
-              <strong className="text-slate-900">{successData.appointment?.type || "-"}</strong>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white border border-slate-200 p-4">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Appointment No</p>
+                <strong className="text-slate-900 text-lg">{appointmentNo}</strong>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-4">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Type</p>
+                <strong className="text-slate-900 text-lg">{appointmentType}</strong>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-4">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Date</p>
+                <strong className="text-slate-900 text-lg">{formatAppointmentDate(appointmentDate)}</strong>
+                {appointmentDay && <p className="text-slate-500 text-sm mt-1">{appointmentDay}</p>}
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-4">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Time</p>
+                <strong className="text-slate-900 text-lg">{appointmentTime || "-"}</strong>
+              </div>
+
+              <div className="rounded-2xl bg-white border border-slate-200 p-4 sm:col-span-2">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Consultation Fee</p>
+                <strong className="text-indigo-700 text-lg">LKR {appointmentFee.toLocaleString()}</strong>
+              </div>
             </div>
           </div>
 

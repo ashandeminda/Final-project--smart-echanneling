@@ -308,7 +308,7 @@ export const verifyStripeSession = async (req, res) => {
     const stripe = getStripeClient();
     const stripeSession = await stripe.checkout.sessions.retrieve(req.params.sessionId);
 
-    const session = await paymentSessionModel
+    let session = await paymentSessionModel
       .findOne({ stripeSessionId: stripeSession.id })
       .populate("relatedAppointmentId", "appointmentNo type date time")
       .populate("relatedDonationId", "amount");
@@ -335,6 +335,11 @@ export const verifyStripeSession = async (req, res) => {
 
     await session.save();
 
+    session = await paymentSessionModel
+      .findById(session._id)
+      .populate("relatedAppointmentId", "appointmentNo type date time")
+      .populate("relatedDonationId", "amount");
+
     return res.json({
       success: true,
       status: session.status,
@@ -343,6 +348,8 @@ export const verifyStripeSession = async (req, res) => {
       appointment: session.relatedAppointmentId || null,
       donation: session.relatedDonationId || null,
       amount: session.amount,
+      payload: session.payload || {},
+      createdAt: session.createdAt,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to verify Stripe session" });
