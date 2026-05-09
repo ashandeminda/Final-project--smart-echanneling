@@ -23,6 +23,21 @@ const formatAppointmentDate = (dateValue) => {
   });
 };
 
+const formatAppointmentDay = (dateValue) => {
+  if (!dateValue) {
+    return "";
+  }
+
+  const parsedDate = new Date(`${dateValue}T00:00:00`);
+  if (Number.isNaN(parsedDate.getTime())) {
+    return "";
+  }
+
+  return parsedDate.toLocaleDateString("en-US", {
+    weekday: "long",
+  });
+};
+
 const getStoredBookingData = () => {
   try {
     const stored = sessionStorage.getItem(APPOINTMENT_BOOKING_STORAGE_KEY);
@@ -154,8 +169,8 @@ function AppointmentPayment() {
     const appointmentType = appointment.type || appointmentPayload.type || bookingData.type || "In-Person";
     const appointmentDoctor = appointmentPayload.doctor || bookingData.doctor || "Doctor";
     const appointmentHospital = appointmentPayload.hospital || bookingData.hospital || "Hospital";
-    const appointmentDay = bookingData.day || "";
-    const appointmentFee = Number(bookingData.fee || 0);
+    const appointmentDay = bookingData.day || formatAppointmentDay(appointmentDate);
+    const appointmentFee = Number(successData.amount || bookingData.fee || 0);
 
     return (
       <div className="min-h-screen bg-slate-50 flex items-center justify-center p-6">
@@ -184,6 +199,12 @@ function AppointmentPayment() {
             </div>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              <div className="rounded-2xl bg-white border border-slate-200 p-4 sm:col-span-2">
+                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Doctor</p>
+                <strong className="text-slate-900 text-lg">{appointmentDoctor}</strong>
+                <p className="text-slate-500 text-sm mt-1">{appointmentHospital}</p>
+              </div>
+
               <div className="rounded-2xl bg-white border border-slate-200 p-4">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Appointment No</p>
                 <strong className="text-slate-900 text-lg">{appointmentNo}</strong>
