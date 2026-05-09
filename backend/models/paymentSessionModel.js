@@ -44,6 +44,10 @@ const paymentSessionSchema = new mongoose.Schema(
       ref: "Appointment",
       required: false,
     },
+    paymentConfirmationEmailsSent: {
+      type: Boolean,
+      default: false,
+    },
   },
   { timestamps: true }
 );

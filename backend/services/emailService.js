@@ -135,3 +135,80 @@ export const sendApprovalEmails = async (appointment, patient, doctorUser) => {
     console.error("Error sending telemedicine approval emails:", error);
   }
 };
+
+export const sendPaymentSuccessEmails = async (appointment, patient, doctorUser) => {
+  try {
+    const t = await initTransporter();
+    const frontendHost = process.env.FRONTEND_URL || "http://localhost:5173";
+    const appointmentLink = `${frontendHost}/myappoinment`;
+
+    const doctorName =
+      appointment?.doctorId?.name ||
+      doctorUser?.name ||
+      "Doctor";
+
+    const hospitalName =
+      appointment?.doctorId?.hospital ||
+      "Smart EChanneling";
+
+    const patientMailOptions = {
+      from: '"Smart EChanneling" <no-reply@echanneling.lk>',
+      to: patient.email,
+      subject: `Payment Successful - Appointment ${appointment.appointmentNo}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
+          <h2>Payment Successful</h2>
+          <p>Dear <strong>${patient.name}</strong>,</p>
+          <p>Your appointment payment was successful. Your appointment has now been created.</p>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>Doctor:</strong> ${doctorName}</li>
+            <li style="margin-bottom: 8px;"><strong>Hospital:</strong> ${hospitalName}</li>
+            <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>
+            <li style="margin-bottom: 8px;"><strong>Time:</strong> ${appointment.time}</li>
+            <li style="margin-bottom: 8px;"><strong>Type:</strong> ${appointment.type}</li>
+          </ul>
+          <div style="margin: 30px 0;">
+            <a href="${appointmentLink}" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View My Appointments</a>
+          </div>
+          <p>Thank you for using Smart EChanneling.</p>
+        </div>
+      `,
+    };
+
+    const doctorMailOptions = {
+      from: '"Smart EChanneling" <no-reply@echanneling.lk>',
+      to: doctorUser.email,
+      subject: `New Paid Appointment - ${appointment.appointmentNo}`,
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
+          <h2>New Paid Appointment</h2>
+          <p>Dear <strong>${doctorUser.name}</strong>,</p>
+          <p>A patient has successfully completed the payment and the appointment is now confirmed.</p>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>Patient:</strong> ${patient.name}</li>
+            <li style="margin-bottom: 8px;"><strong>Patient Email:</strong> ${patient.email}</li>
+            <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>
+            <li style="margin-bottom: 8px;"><strong>Time:</strong> ${appointment.time}</li>
+            <li style="margin-bottom: 8px;"><strong>Type:</strong> ${appointment.type}</li>
+          </ul>
+          <p>Smart EChanneling System</p>
+        </div>
+      `,
+    };
+
+    const patientInfo = await t.sendMail(patientMailOptions);
+    const doctorInfo = await t.sendMail(doctorMailOptions);
+
+    console.log("---------------------------------------");
+    console.log("PAYMENT CONFIRMATION EMAILS SENT");
+    if (!process.env.SMTP_USER) {
+      console.log("Patient Preview URL: %s", nodemailer.getTestMessageUrl(patientInfo));
+      console.log("Doctor Preview URL:  %s", nodemailer.getTestMessageUrl(doctorInfo));
+    }
+    console.log("---------------------------------------");
+  } catch (error) {
+    console.error("Error sending payment success emails:", error);
+  }
+};

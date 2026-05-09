@@ -1,8 +1,10 @@
 import Stripe from "stripe";
 import appointmentModel from "../models/appointmentModel.js";
+import doctorModel from "../models/doctorModel.js";
 import donationModel from "../models/donationModel.js";
 import paymentSessionModel from "../models/paymentSessionModel.js";
 import userModel from "../models/userModel.js";
+import { sendPaymentSuccessEmails } from "../services/emailService.js";
 
 const getEnv = (key, fallback = "") => process.env[key] || fallback;
 
@@ -111,6 +113,50 @@ const ensureCompletedRecord = async (session) => {
   if (session.type === "appointment" && !session.relatedAppointmentId) {
     await createAppointmentFromSession(session);
   }
+};
+
+const sendAppointmentPaymentEmailsIfNeeded = async (session) => {
+  if (
+    session.type !== "appointment" ||
+    !session.relatedAppointmentId ||
+    session.paymentConfirmationEmailsSent
+  ) {
+    return;
+  }
+
+  const appointment = await appointmentModel
+    .findById(session.relatedAppointmentId)
+    .populate("userId", "name email");
+
+  if (!appointment) {
+    return;
+  }
+
+  const doctor = await doctorModel
+    .findById(appointment.doctorId)
+    .populate("userId", "name email");
+
+  const patient = appointment.userId;
+  const doctorUser = doctor?.userId;
+
+  if (!patient?.email || !doctorUser?.email) {
+    return;
+  }
+
+  await sendPaymentSuccessEmails(
+    {
+      ...appointment.toObject(),
+      doctorId: {
+        name: doctor?.name || "",
+        hospital: doctor?.hospital || "",
+      },
+    },
+    patient,
+    doctorUser
+  );
+
+  session.paymentConfirmationEmailsSent = true;
+  await session.save();
 };
 
 const buildCheckoutUrls = (type) => {
@@ -334,6 +380,7 @@ export const verifyStripeSession = async (req, res) => {
     }
 
     await session.save();
+    await sendAppointmentPaymentEmailsIfNeeded(session);
 
     session = await paymentSessionModel
       .findById(session._id)
