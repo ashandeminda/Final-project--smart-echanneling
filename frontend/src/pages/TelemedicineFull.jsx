@@ -67,16 +67,24 @@ function TelemedicineFull() {
   const [nextAppointmentNo, setNextAppointmentNo] = useState(null);
 
   useEffect(() => {
+    let isActive = true;
+
     if (selectedDoctor?._id && selectedSlot.date) {
+      setNextAppointmentNo(null);
+
       appointmentService
         .getNextAppointmentNumber(selectedDoctor._id, selectedSlot.date)
         .then((res) => {
-          if (res.success) setNextAppointmentNo(res.appointmentNo);
+          if (isActive && res.success) setNextAppointmentNo(res.appointmentNo);
         })
         .catch((err) => console.error("Failed to fetch appointment no:", err));
     } else {
       setNextAppointmentNo(null);
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [selectedDoctor, selectedSlot.date]);
 
   useEffect(() => {

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
@@ -53,7 +53,13 @@ function AppointmentPayment() {
   const [searchParams] = useSearchParams();
   const { isAuthenticated } = useAuth();
 
-  const bookingData = location.state || getStoredBookingData();
+  const bookingData = useMemo(() => {
+    if (location.state && Object.keys(location.state).length > 0) {
+      return location.state;
+    }
+
+    return getStoredBookingData();
+  }, [location.state]);
   const stripeSessionId = searchParams.get("session_id");
   const isCancelled = searchParams.get("cancelled") === "true";
 
@@ -70,10 +76,16 @@ function AppointmentPayment() {
   }, [location.state]);
 
   useEffect(() => {
+    let isActive = true;
+
     if (stripeSessionId) {
       paymentService
         .verifyStripeSession(stripeSessionId)
         .then((response) => {
+          if (!isActive) {
+            return;
+          }
+
           if (response.status !== "completed") {
             throw new Error("Payment has not been completed yet.");
           }
@@ -81,19 +93,31 @@ function AppointmentPayment() {
           setSuccessData(response);
         })
         .catch((err) => {
+          if (!isActive) {
+            return;
+          }
+
           console.error("Stripe verification failed:", err);
           setError(err.response?.data?.message || err.message || "Unable to verify payment.");
         })
-        .finally(() => setVerifying(false));
+        .finally(() => {
+          if (isActive) {
+            setVerifying(false);
+          }
+        });
 
-      return;
+      return () => {
+        isActive = false;
+      };
     }
 
     if (bookingData.doctorId && bookingData.date) {
+      setAppointmentNumber(null);
+
       appointmentService
         .getNextAppointmentNumber(bookingData.doctorId, bookingData.date)
         .then((res) => {
-          if (res.success) {
+          if (isActive && res.success) {
             setAppointmentNumber(res.appointmentNo);
           }
         })
@@ -101,6 +125,10 @@ function AppointmentPayment() {
     } else {
       setAppointmentNumber(null);
     }
+
+    return () => {
+      isActive = false;
+    };
   }, [bookingData.date, bookingData.doctorId, stripeSessionId]);
 
   useEffect(() => {

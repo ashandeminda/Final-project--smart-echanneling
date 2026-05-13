@@ -24,17 +24,34 @@ const getStripeClient = () => {
 const getFrontendUrl = () => getEnv("FRONTEND_URL", "http://localhost:5173");
 
 const getNextAppointmentNo = async (doctorId, date) => {
-  const appointments = await appointmentModel.find(
-    {
-      appointmentNo: { $regex: "^[0-9]+$" },
-      doctorId,
-      date,
-    },
-    { appointmentNo: 1, _id: 0 }
-  );
+  const [appointments, reservedSessions] = await Promise.all([
+    appointmentModel.find(
+      {
+        appointmentNo: { $regex: "^[0-9]+$" },
+        doctorId,
+        date,
+      },
+      { appointmentNo: 1, _id: 0 }
+    ),
+    paymentSessionModel.find(
+      {
+        type: "appointment",
+        "payload.doctorId": doctorId,
+        "payload.date": date,
+        reservedAppointmentNo: { $regex: "^[0-9]+$" },
+        status: { $in: ["initiated", "pending"] },
+        relatedAppointmentId: { $exists: false },
+      },
+      { reservedAppointmentNo: 1, _id: 0 }
+    ),
+  ]);
 
-  const numbers = appointments
-    .map((a) => Number.parseInt(a.appointmentNo, 10))
+  const numbers = [
+    ...appointments.map((a) => Number.parseInt(a.appointmentNo, 10)),
+    ...reservedSessions.map((session) =>
+      Number.parseInt(session.reservedAppointmentNo, 10)
+    ),
+  ]
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 100);
 
   const nextNumber = numbers.length ? Math.max(...numbers) + 1 : 1;
@@ -61,7 +78,8 @@ const createAppointmentFromSession = async (session) => {
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
-    const appointmentNo = await getNextAppointmentNo(doctorId, date);
+    const appointmentNo =
+      session.reservedAppointmentNo || (await getNextAppointmentNo(doctorId, date));
     if (!appointmentNo) {
       throw new Error("Appointment numbers are full (1-100)");
     }
@@ -77,11 +95,14 @@ const createAppointmentFromSession = async (session) => {
       });
 
       session.relatedAppointmentId = appointment._id;
+      session.reservedAppointmentNo = appointmentNo;
       return appointment;
     } catch (error) {
       if (error?.code !== 11000) {
         throw error;
       }
+
+      session.reservedAppointmentNo = "";
     }
   }
 
@@ -296,7 +317,13 @@ export const initiateAppointmentPayment = async (req, res) => {
     const user = await userModel.findById(req.user.id).select("name email phone");
     const nameParts = String(user?.name || "Patient User").trim().split(" ");
 
+    const reservedAppointmentNo = await getNextAppointmentNo(doctorId, date);
+    if (!reservedAppointmentNo) {
+      return res.status(400).json({ message: "Appointment numbers are full (1-100)" });
+    }
+
     const session = await paymentSessionModel.create({
+      reservedAppointmentNo,
       orderId: generateOrderId("APT"),
       type: "appointment",
       userId: req.user.id,

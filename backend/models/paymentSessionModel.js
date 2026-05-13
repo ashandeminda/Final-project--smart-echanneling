@@ -24,6 +24,7 @@ const paymentSessionSchema = new mongoose.Schema(
     stripeSessionId: { type: String, default: "" },
     stripePaymentIntentId: { type: String, default: "" },
     paymentMethod: { type: String, default: "" },
+    reservedAppointmentNo: { type: String, default: "", index: true },
     customer: {
       firstName: { type: String, default: "" },
       lastName: { type: String, default: "" },

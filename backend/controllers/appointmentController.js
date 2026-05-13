@@ -1,22 +1,37 @@
 import appointmentModel from "../models/appointmentModel.js";
 import doctorModel from "../models/doctorModel.js";
+import paymentSessionModel from "../models/paymentSessionModel.js";
 import { sendApprovalEmails } from "../services/emailService.js";
 
 const TELEMEDICINE_TYPES = ["Video Consultation", "Chat Consultation"];
 
 const getNextAppointmentNo = async (doctorId, date) => {
-  const query = {
+  const appointmentQuery = {
     appointmentNo: { $regex: "^[0-9]+$" },
   };
-  if (doctorId) query.doctorId = doctorId;
-  if (date) query.date = date;
-  const appointments = await appointmentModel.find(
-    query,
-    { appointmentNo: 1, _id: 0 }
-  );
+  if (doctorId) appointmentQuery.doctorId = doctorId;
+  if (date) appointmentQuery.date = date;
 
-  const numbers = appointments
-    .map((a) => Number.parseInt(a.appointmentNo, 10))
+  const sessionQuery = {
+    type: "appointment",
+    reservedAppointmentNo: { $regex: "^[0-9]+$" },
+    status: { $in: ["initiated", "pending"] },
+    relatedAppointmentId: { $exists: false },
+  };
+  if (doctorId) sessionQuery["payload.doctorId"] = doctorId;
+  if (date) sessionQuery["payload.date"] = date;
+
+  const [appointments, reservedSessions] = await Promise.all([
+    appointmentModel.find(appointmentQuery, { appointmentNo: 1, _id: 0 }),
+    paymentSessionModel.find(sessionQuery, { reservedAppointmentNo: 1, _id: 0 }),
+  ]);
+
+  const numbers = [
+    ...appointments.map((a) => Number.parseInt(a.appointmentNo, 10)),
+    ...reservedSessions.map((session) =>
+      Number.parseInt(session.reservedAppointmentNo, 10)
+    ),
+  ]
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 100);
 
   const nextNumber = numbers.length ? Math.max(...numbers) + 1 : 1;
