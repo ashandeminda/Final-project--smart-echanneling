@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import doctorImg from "../assets/doctor.jpg";
 import doctorService from "../api/doctorService";
@@ -10,6 +10,7 @@ function Doctors() {
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [selectedSpecialty, setSelectedSpecialty] = useState("All");
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -31,6 +32,14 @@ function Doctors() {
     fetchDoctors();
   }, []);
 
+  const specialtyOptions = useMemo(() => {
+    const specialties = doctors
+      .map((doc) => String(doc.specialization || "").trim())
+      .filter(Boolean);
+
+    return ["All", ...new Set(specialties)];
+  }, [doctors]);
+
   const filteredDoctors = doctors.filter((doc) => {
     const matchesHospital = hospitalFilter
       ? String(doc.hospital || "").toLowerCase().includes(hospitalFilter.toLowerCase())
@@ -41,7 +50,11 @@ function Doctors() {
         String(doc.specialization || "").toLowerCase().includes(search.toLowerCase())
       : true;
 
-    return matchesHospital && matchesSearch;
+    const matchesSpecialty =
+      selectedSpecialty === "All" ||
+      String(doc.specialization || "").trim().toLowerCase() === selectedSpecialty.toLowerCase();
+
+    return matchesHospital && matchesSearch && matchesSpecialty;
   });
 
   const handleSearchSubmit = (e) => {
@@ -92,6 +105,28 @@ function Doctors() {
             Search
           </button>
         </form>
+
+        <div className="max-w-md">
+          <div className="relative">
+            <select
+              value={selectedSpecialty}
+              onChange={(e) => setSelectedSpecialty(e.target.value)}
+              className="w-full appearance-none rounded-[1.5rem] border-2 border-slate-200 bg-white px-6 py-4 pr-14 text-lg font-medium text-slate-700 shadow-sm outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+            >
+              <option value="All">Select Specialization</option>
+              {specialtyOptions
+                .filter((specialty) => specialty !== "All")
+                .map((specialty) => (
+                  <option key={specialty} value={specialty}>
+                    {specialty}
+                  </option>
+                ))}
+            </select>
+            <span className="pointer-events-none absolute inset-y-0 right-5 flex items-center text-2xl text-slate-500">
+              ˅
+            </span>
+          </div>
+        </div>
 
         {/* CONTENT */}
         <div>
