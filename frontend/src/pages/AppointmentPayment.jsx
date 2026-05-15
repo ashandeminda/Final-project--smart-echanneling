@@ -3,8 +3,13 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
 import { useAuth } from "../context/useAuth";
-
-const APPOINTMENT_BOOKING_STORAGE_KEY = "appointment-payment-booking";
+import {
+  clearStoredAppointmentPaymentData,
+  clearStoredBookingPageState,
+  clearStoredTelemedicineBookingDraft,
+  getStoredAppointmentPaymentData,
+  setStoredAppointmentPaymentData,
+} from "../utils/paymentBookingStorage";
 
 const formatAppointmentDate = (dateValue) => {
   if (!dateValue) {
@@ -38,15 +43,6 @@ const formatAppointmentDay = (dateValue) => {
   });
 };
 
-const getStoredBookingData = () => {
-  try {
-    const stored = sessionStorage.getItem(APPOINTMENT_BOOKING_STORAGE_KEY);
-    return stored ? JSON.parse(stored) : {};
-  } catch {
-    return {};
-  }
-};
-
 function AppointmentPayment() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -58,7 +54,7 @@ function AppointmentPayment() {
       return location.state;
     }
 
-    return getStoredBookingData();
+    return getStoredAppointmentPaymentData();
   }, [location.state]);
   const stripeSessionId = searchParams.get("session_id");
   const isCancelled = searchParams.get("cancelled") === "true";
@@ -71,7 +67,7 @@ function AppointmentPayment() {
 
   useEffect(() => {
     if (location.state && Object.keys(location.state).length > 0) {
-      sessionStorage.setItem(APPOINTMENT_BOOKING_STORAGE_KEY, JSON.stringify(location.state));
+      setStoredAppointmentPaymentData(location.state);
     }
   }, [location.state]);
 
@@ -133,9 +129,20 @@ function AppointmentPayment() {
 
   useEffect(() => {
     if (successData) {
-      sessionStorage.removeItem(APPOINTMENT_BOOKING_STORAGE_KEY);
+      clearStoredAppointmentPaymentData();
+      clearStoredBookingPageState();
+      clearStoredTelemedicineBookingDraft();
     }
   }, [successData]);
+
+  const handleBackToFlow = () => {
+    if (bookingData.returnPath === "/telemedicine") {
+      navigate("/telemedicine");
+      return;
+    }
+
+    navigate("/booking", { state: bookingData });
+  };
 
   const handlePayment = async () => {
     if (!isAuthenticated) {
@@ -168,6 +175,7 @@ function AppointmentPayment() {
         throw new Error("Stripe checkout URL was not returned.");
       }
 
+      setStoredAppointmentPaymentData(bookingData);
       window.location.href = response.checkoutUrl;
     } catch (err) {
       console.error("Payment initialization failed:", err);
@@ -277,9 +285,9 @@ function AppointmentPayment() {
       <div className="max-w-4xl mx-auto">
         <button
           className="flex items-center text-slate-500 hover:text-slate-900 font-bold mb-6 transition-colors"
-          onClick={() => navigate(-1)}
+          onClick={handleBackToFlow}
         >
-          <span className="mr-2">&larr;</span> Back to booking
+          <span className="mr-2">&larr;</span> Back
         </button>
 
         <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6 lg:gap-8 items-start">

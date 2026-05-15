@@ -1,7 +1,12 @@
-import React, { useState } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import doctorImg from "../assets/doctor.jpg";
+import {
+  getStoredBookingPageState,
+  setStoredAppointmentPaymentData,
+  setStoredBookingPageState,
+} from "../utils/paymentBookingStorage";
 
 const weeklyAvailability = [
   { day: "Monday", times: ["09:00", "10:00", "11:00", "14:00"] },
@@ -38,22 +43,31 @@ function Booking() {
   const location = useLocation();
   const { isAuthenticated } = useAuth();
 
-  const doctorData = location.state || {
-    doctorId: null,
-    doctor: "Dr. Michel",
-    specialty: "cardiologist",
-    hospital: "City General Hospital",
-    fee: 3500,
-    experience: "15 years experience",
-    image: "",
-    rating: "4.8",
-  };
+  const storedBookingState = useMemo(() => getStoredBookingPageState(), []);
+  const doctorData = useMemo(
+    () =>
+      location.state || storedBookingState.doctorData || {
+        doctorId: null,
+        doctor: "Dr. Michel",
+        specialty: "cardiologist",
+        hospital: "City General Hospital",
+        fee: 3500,
+        experience: "15 years experience",
+        image: "",
+        rating: "4.8",
+      },
+    [location.state, storedBookingState.doctorData]
+  );
 
-  const [form, setForm] = useState({
-    day: "",
-    date: "",
-    time: "",
-  });
+  const [form, setForm] = useState(() => ({
+    day: storedBookingState.form?.day || "",
+    date: storedBookingState.form?.date || "",
+    time: storedBookingState.form?.time || "",
+  }));
+
+  useEffect(() => {
+    setStoredBookingPageState({ doctorData, form });
+  }, [doctorData, form]);
 
   const handleTimeSelect = (day, time) => {
     setForm({
@@ -81,22 +95,28 @@ function Booking() {
       return;
     }
 
+    const paymentState = {
+      doctorId: doctorData.doctorId,
+      doctor: doctorData.doctor,
+      specialty: doctorData.specialty,
+      hospital: doctorData.hospital,
+      fee: doctorData.fee,
+      experience: doctorData.experience,
+      image: doctorData.image,
+      rating: doctorData.rating,
+      patientsCount: doctorData.patientsCount,
+      date: form.date,
+      day: form.day,
+      time: form.time,
+      type: "In-Person",
+      source: "booking",
+      returnPath: "/booking",
+    };
+
+    setStoredAppointmentPaymentData(paymentState);
+
     navigate("/appointment-payment", {
-      state: {
-        doctorId: doctorData.doctorId,
-        doctor: doctorData.doctor,
-        specialty: doctorData.specialty,
-        hospital: doctorData.hospital,
-        fee: doctorData.fee,
-        experience: doctorData.experience,
-        image: doctorData.image,
-        rating: doctorData.rating,
-        patientsCount: doctorData.patientsCount,
-        date: form.date,
-        day: form.day,
-        time: form.time,
-        type: "In-Person",
-      },
+      state: paymentState,
     });
   };
 

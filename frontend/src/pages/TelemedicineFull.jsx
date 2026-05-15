@@ -5,6 +5,11 @@ import doctorService from "../api/doctorService";
 import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
 import { useAuth } from "../context/useAuth";
+import {
+  getStoredTelemedicineBookingDraft,
+  setStoredAppointmentPaymentData,
+  setStoredTelemedicineBookingDraft,
+} from "../utils/paymentBookingStorage";
 
 const defaultTimeSlots = ["09:00", "10:00", "11:00", "14:00"];
 
@@ -56,15 +61,38 @@ const formatDisplayDate = (dateValue) => {
 function TelemedicineFull() {
   const navigate = useNavigate();
   const { isAuthenticated } = useAuth();
+  const storedDraft = useMemo(() => getStoredTelemedicineBookingDraft(), []);
 
-  const [sessionType, setSessionType] = useState("");
-  const [selectedDoctor, setSelectedDoctor] = useState(null);
-  const [selectedSlot, setSelectedSlot] = useState({ day: "", time: "", date: "" });
-  const [search, setSearch] = useState("");
+  const [sessionType, setSessionType] = useState(storedDraft.sessionType || "");
+  const [selectedDoctor, setSelectedDoctor] = useState(storedDraft.selectedDoctor || null);
+  const [selectedSlot, setSelectedSlot] = useState(
+    storedDraft.selectedSlot || { day: "", time: "", date: "" }
+  );
+  const [search, setSearch] = useState(storedDraft.search || "");
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [nextAppointmentNo, setNextAppointmentNo] = useState(null);
+
+  useEffect(() => {
+    if (!selectedDoctor?._id || doctors.length === 0) {
+      return;
+    }
+
+    const latestDoctor = doctors.find((doc) => doc._id === selectedDoctor._id);
+    if (latestDoctor) {
+      setSelectedDoctor(latestDoctor);
+    }
+  }, [doctors, selectedDoctor]);
+
+  useEffect(() => {
+    setStoredTelemedicineBookingDraft({
+      sessionType,
+      selectedDoctor,
+      selectedSlot,
+      search,
+    });
+  }, [search, selectedDoctor, selectedSlot, sessionType]);
 
   useEffect(() => {
     let isActive = true;
@@ -205,6 +233,22 @@ function TelemedicineFull() {
       setSubmitting(true);
 
       if (needsPayment) {
+        const paymentState = {
+          doctorId: selectedDoctor._id,
+          doctor: selectedDoctor.name || "",
+          specialty: selectedDoctor.specialization || "",
+          hospital: selectedDoctor.hospital || "",
+          fee: consultationFee,
+          date: selectedSlot.date,
+          day: selectedSlot.day,
+          time: selectedSlot.time,
+          type: sessionType,
+          source: "telemedicine",
+          returnPath: "/telemedicine",
+        };
+
+        setStoredAppointmentPaymentData(paymentState);
+
         const response = await paymentService.initiateAppointmentPayment({
           doctorId: selectedDoctor._id,
           date: selectedSlot.date,
