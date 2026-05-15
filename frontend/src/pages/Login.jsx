@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 // Import useAuth hook to connect with backend authentication
 import { useAuth } from "../context/useAuth";
 
-const handleRoleRedirect = (result, navigate, logout) => {
+const handleRoleRedirect = (result, navigate) => {
   if (result.user?.role === "doctor") {
     navigate("/doctor-appointments");
     return;
@@ -21,7 +21,7 @@ function Auth() {
 
   const navigate = useNavigate();
   // Get login function from AuthContext (calls backend API)
-  const { login, logout } = useAuth();
+  const { login } = useAuth();
   const [step, setStep] = useState("login");
   // Loading state to show feedback during API call
   const [loading, setLoading] = useState(false);
@@ -49,11 +49,16 @@ function Auth() {
     setLoading(false);
 
     if (result.success) {
-      handleRoleRedirect(result, navigate, logout);
+      handleRoleRedirect(result, navigate);
     } else {
       // Show error message from backend
       alert(result.message);
     }
+  };
+
+  const handleLoginSubmit = async (e) => {
+    e.preventDefault();
+    await handleLogin();
   };
 
   const inputClass = "w-full mt-2 mb-4 px-4 py-3 rounded-xl border border-slate-200 bg-slate-50 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-500 transition-all text-slate-700";
@@ -80,7 +85,7 @@ function Auth() {
                 Sign in to your account
               </p>
 
-              <div>
+              <form onSubmit={handleLoginSubmit}>
                 <label className={labelClass}>Email address</label>
                 <input
                   type="email"
@@ -110,7 +115,7 @@ function Auth() {
                   </span>
                 </div>
 
-                <button className={btnClass} onClick={handleLogin} disabled={loading}>
+                <button type="submit" className={btnClass} disabled={loading}>
                   {loading ? "Signing in..." : "Sign In"}
                 </button>
 
@@ -135,7 +140,7 @@ function Auth() {
                     </span>
                   </p>
                 </div>
-              </div>
+              </form>
             </div>
           )}
 
