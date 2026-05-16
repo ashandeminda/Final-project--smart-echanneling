@@ -9,7 +9,7 @@ function Home() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* HERO SECTION */}
-      <section className="relative overflow-hidden bg-linear-to-br from-slate-900 via-blue-900 to-indigo-900 text-white py-20 lg:py-32 px-6 sm:px-12 lg:px-24 flex flex-col lg:flex-row items-center justify-between min-h-[80vh]">
+      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white py-20 lg:py-32 px-6 sm:px-12 lg:px-24 flex flex-col lg:flex-row items-center justify-between min-h-[80vh]">
         {/* Background decorative blobs */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-pulse"></div>
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-pulse" style={{ animationDelay: '2s' }}></div>
@@ -17,7 +17,7 @@ function Home() {
         <div className="w-full lg:w-1/2 z-10 mb-16 lg:mb-0 text-center lg:text-left">
           <h1 className="text-4xl sm:text-5xl lg:text-7xl font-extrabold tracking-tight mb-6 leading-tight">
             Your Health, <br />
-            <span className="text-transparent bg-clip-text bg-linear-to-r from-blue-400 to-teal-300">Our Priority</span>
+            <span className="text-transparent bg-clip-text bg-gradient-to-r from-blue-400 to-teal-300">Our Priority</span>
           </h1>
           <p className="text-lg sm:text-xl text-blue-100/80 mb-10 max-w-2xl mx-auto lg:mx-0 leading-relaxed">
             Book appointments, consult doctors online, check symptoms
@@ -43,7 +43,7 @@ function Home() {
         <div className="w-full lg:w-1/2 z-10 flex justify-center lg:justify-end relative">
           <div className="relative">
             {/* Soft glow behind image */}
-            <div className="absolute -inset-1 bg-linear-to-r from-blue-500 to-teal-500 rounded-3xl blur opacity-30"></div>
+            <div className="absolute -inset-1 bg-gradient-to-r from-blue-500 to-teal-500 rounded-3xl blur opacity-30"></div>
             <img
               src={heroImg}
               alt="Healthcare professional"

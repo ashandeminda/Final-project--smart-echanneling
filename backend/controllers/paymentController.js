@@ -7,6 +7,7 @@ import userModel from "../models/userModel.js";
 import { sendPaymentSuccessEmails } from "../services/emailService.js";
 
 const getEnv = (key, fallback = "") => process.env[key] || fallback;
+const APPOINTMENT_RESERVATION_WINDOW_MS = 30 * 60 * 1000;
 
 const generateOrderId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -39,12 +40,15 @@ const buildInstantChatSchedule = () => {
 };
 
 const getNextAppointmentNo = async (doctorId, date) => {
+  const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+
   const [appointments, reservedSessions] = await Promise.all([
     appointmentModel.find(
       {
         appointmentNo: { $regex: "^[0-9]+$" },
         doctorId,
         date,
+        status: { $in: ["pending", "approved"] },
       },
       { appointmentNo: 1, _id: 0 }
     ),
@@ -56,6 +60,7 @@ const getNextAppointmentNo = async (doctorId, date) => {
         reservedAppointmentNo: { $regex: "^[0-9]+$" },
         status: { $in: ["initiated", "pending"] },
         relatedAppointmentId: { $exists: false },
+        createdAt: { $gte: activeReservationCutoff },
       },
       { reservedAppointmentNo: 1, _id: 0 }
     ),

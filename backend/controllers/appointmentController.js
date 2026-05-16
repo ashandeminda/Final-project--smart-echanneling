@@ -4,6 +4,7 @@ import paymentSessionModel from "../models/paymentSessionModel.js";
 import { sendApprovalEmails } from "../services/emailService.js";
 
 const TELEMEDICINE_TYPES = ["Video Consultation", "Chat Consultation"];
+const APPOINTMENT_RESERVATION_WINDOW_MS = 30 * 60 * 1000;
 
 const formatDatePart = (value) => String(value).padStart(2, "0");
 
@@ -21,8 +22,11 @@ const buildInstantChatSchedule = () => {
 };
 
 const getNextAppointmentNo = async (doctorId, date) => {
+  const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+
   const appointmentQuery = {
     appointmentNo: { $regex: "^[0-9]+$" },
+    status: { $in: ["pending", "approved"] },
   };
   if (doctorId) appointmentQuery.doctorId = doctorId;
   if (date) appointmentQuery.date = date;
@@ -32,6 +36,7 @@ const getNextAppointmentNo = async (doctorId, date) => {
     reservedAppointmentNo: { $regex: "^[0-9]+$" },
     status: { $in: ["initiated", "pending"] },
     relatedAppointmentId: { $exists: false },
+    createdAt: { $gte: activeReservationCutoff },
   };
   if (doctorId) sessionQuery["payload.doctorId"] = doctorId;
   if (date) sessionQuery["payload.date"] = date;
