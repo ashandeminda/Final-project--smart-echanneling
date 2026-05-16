@@ -67,7 +67,7 @@ function Doctors() {
       <div className="max-w-7xl mx-auto space-y-8">
         
         {/* HERO SECTION */}
-        <div className="bg-white border border-slate-200 rounded-[2rem] p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col lg:flex-row items-center justify-between gap-8">
+        <div className="bg-white border border-slate-200 rounded-4xl p-8 md:p-12 shadow-[0_8px_30px_rgb(0,0,0,0.04)] flex flex-col lg:flex-row items-center justify-between gap-8">
           <div className="flex-1 max-w-2xl text-center lg:text-left">
             <span className="inline-block px-3 py-1 bg-indigo-50 text-indigo-600 font-bold text-[10px] uppercase tracking-widest rounded-full mb-4 border border-indigo-100">
               Find Your Specialist
@@ -81,11 +81,11 @@ function Doctors() {
           </div>
           
           <div className="flex gap-4 flex-wrap justify-center lg:justify-end shrink-0">
-            <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl min-w-[140px] text-center shadow-sm">
+            <div className="bg-slate-50 border border-slate-200 p-5 rounded-2xl min-w-35 text-center shadow-sm">
               <strong className="block text-2xl font-extrabold text-slate-900 mb-1">{filteredDoctors.length}</strong>
               <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Specialists</span>
             </div>
-            <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-2xl min-w-[160px] max-w-[200px] text-center shadow-sm flex flex-col justify-center">
+            <div className="bg-indigo-50 border border-indigo-100 p-5 rounded-2xl min-w-40 max-w-50 text-center shadow-sm flex flex-col justify-center">
               <strong className="block text-base font-bold text-indigo-900 mb-1 truncate px-2" title={hospitalFilter || "All Hospitals"}>{hospitalFilter || "All Hospitals"}</strong>
               <span className="text-xs font-bold text-indigo-400 uppercase tracking-widest">Showing</span>
             </div>
@@ -111,7 +111,7 @@ function Doctors() {
             <select
               value={selectedSpecialty}
               onChange={(e) => setSelectedSpecialty(e.target.value)}
-              className="w-full appearance-none rounded-[1.5rem] border-2 border-slate-200 bg-white px-6 py-4 pr-14 text-lg font-medium text-slate-700 shadow-sm outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
+              className="w-full appearance-none rounded-3xl border-2 border-slate-200 bg-white px-6 py-4 pr-14 text-lg font-medium text-slate-700 shadow-sm outline-none transition-all focus:border-indigo-400 focus:ring-4 focus:ring-indigo-50"
             >
               <option value="All">Select Specialization</option>
               {specialtyOptions
@@ -152,10 +152,10 @@ function Doctors() {
             )}
 
             {!loading && !error && filteredDoctors.map((doc) => (
-              <div key={doc._id} className="bg-white border border-slate-200 rounded-[1.5rem] p-5 md:p-6 shadow-[0_4px_15px_rgb(0,0,0,0.03)] hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col md:flex-row gap-6 md:items-center relative">
+              <div key={doc._id} className="bg-white border border-slate-200 rounded-3xl p-5 md:p-6 shadow-[0_4px_15px_rgb(0,0,0,0.03)] hover:shadow-[0_15px_30px_rgb(0,0,0,0.08)] transition-all duration-300 flex flex-col md:flex-row gap-6 md:items-center relative">
                 
                 {/* Image */}
-                <div className="w-full md:w-48 h-56 md:h-auto md:aspect-[4/5] bg-slate-100 rounded-[1rem] overflow-hidden shrink-0 border border-slate-100">
+                <div className="w-full md:w-48 h-56 md:h-auto md:aspect-4/5 bg-slate-100 rounded-2xl overflow-hidden shrink-0 border border-slate-100">
                   <img
                     src={doc.image ? `http://localhost:8080/uploads/${doc.image}` : doctorImg}
                     alt="doctor"

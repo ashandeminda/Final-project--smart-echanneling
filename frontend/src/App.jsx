@@ -22,6 +22,7 @@ import MyProfile from './pages/Myprofile'
 import DoctorLogin from './pages/DoctorLogin'
 import HealthRecords from './pages/HealthRecords'
 import AdminDashboard from './pages/AdminDashboard'
+import DoctorProfile from './pages/DoctorProfile'
 
 
 function App() {
@@ -37,6 +38,7 @@ function App() {
         <Route path="/chat-consultation" element={<ChatConsultation />} />
         <Route path="/video-consultation" element={<VideoConsultation />} />
         <Route path="/doctor-appointments" element={<DoctorAppointments />} />
+        <Route path="/doctor-profile" element={<DoctorProfile />} />
         <Route path='/login' element={<Login />} />
         <Route path='/doctor-login' element={<DoctorLogin />} />
         <Route path='/admin-dashboard' element={<AdminDashboard />} />

@@ -167,6 +167,84 @@ export const getMyDoctorProfile = async (req, res) => {
   }
 };
 
+export const updateMyDoctorProfile = async (req, res) => {
+  try {
+    if (req.user.role !== "doctor") {
+      return res.status(403).json({ message: "Doctor access only" });
+    }
+
+    const doctor = await doctorModel.findOne({ userId: req.user.id });
+    if (!doctor) {
+      return res.status(404).json({ message: "Doctor profile not found" });
+    }
+
+    const user = await userModel.findById(req.user.id);
+    if (!user) {
+      return res.status(404).json({ message: "Doctor account not found" });
+    }
+
+    const {
+      name,
+      email,
+      phone,
+      specialization,
+      experience,
+      hospital,
+      fee,
+      availableDays,
+      videoConsultationEnabled,
+      chatConsultationEnabled,
+    } = req.body;
+
+    if (email && email.toLowerCase() !== String(user.email || "").toLowerCase()) {
+      const existingUser = await userModel.findOne({ email: email.toLowerCase() }).select("_id");
+      if (existingUser && String(existingUser._id) !== String(user._id)) {
+        return res.status(400).json({ message: "Email is already in use" });
+      }
+      user.email = email.toLowerCase();
+    }
+
+    if (name) {
+      user.name = name;
+      doctor.name = name;
+    }
+    if (phone) user.phone = phone;
+    if (specialization) doctor.specialization = specialization;
+    if (experience) doctor.experience = experience;
+    if (hospital) doctor.hospital = hospital;
+    if (fee !== undefined && fee !== "") doctor.fee = Number(fee);
+    if (availableDays) {
+      doctor.availableDays = Array.isArray(availableDays)
+        ? availableDays
+        : JSON.parse(availableDays);
+    }
+    if (videoConsultationEnabled !== undefined) {
+      doctor.videoConsultationEnabled = String(videoConsultationEnabled) === "true";
+    }
+    if (chatConsultationEnabled !== undefined) {
+      doctor.chatConsultationEnabled = String(chatConsultationEnabled) === "true";
+    }
+    if (req.file) {
+      doctor.image = req.file.filename;
+    }
+
+    await user.save();
+    await doctor.save();
+
+    const updatedDoctor = await doctorModel
+      .findById(doctor._id)
+      .populate("userId", "name email phone");
+
+    return res.json({
+      success: true,
+      message: "Doctor profile updated successfully",
+      doctor: updatedDoctor,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: "Update My Doctor Profile Error" });
+  }
+};
+
 // UPDATE DOCTOR
 export const updateDoctor = async (req, res) => {
   try {

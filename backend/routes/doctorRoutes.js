@@ -4,6 +4,7 @@ import {
   getAllDoctors,
   getSingleDoctor,
   getMyDoctorProfile,
+  updateMyDoctorProfile,
   updateDoctor,
   updateMyDoctorSchedule,
   deleteDoctor,
@@ -31,6 +32,7 @@ router.get("/admin/all", requireSignIn, requireAdmin, getAllDoctorsAdmin);
 
 // GET LOGGED-IN DOCTOR PROFILE
 router.get("/me", requireSignIn, getMyDoctorProfile);
+router.put("/me", requireSignIn, upload.single("image"), updateMyDoctorProfile);
 
 // UPDATE LOGGED-IN DOCTOR SCHEDULE
 router.put("/me/schedule", requireSignIn, updateMyDoctorSchedule);

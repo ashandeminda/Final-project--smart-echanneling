@@ -24,6 +24,13 @@ const doctorService = {
     return response.data;
   },
 
+  updateMyDoctorProfile: async (formData) => {
+    const response = await api.put("/doctor/me", formData, {
+      headers: { "Content-Type": "multipart/form-data" },
+    });
+    return response.data;
+  },
+
   // POST /doctor/create - Create a new doctor profile (requires auth + image)
   // Body (FormData): { name, specialization, experience, hospital, fee, availableDays, image }
   createDoctor: async (formData) => {
