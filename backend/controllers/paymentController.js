@@ -23,6 +23,21 @@ const getStripeClient = () => {
 
 const getFrontendUrl = () => getEnv("FRONTEND_URL", "http://localhost:5173");
 
+const formatDatePart = (value) => String(value).padStart(2, "0");
+
+const buildInstantChatSchedule = () => {
+  const now = new Date();
+
+  return {
+    date: `${now.getFullYear()}-${formatDatePart(now.getMonth() + 1)}-${formatDatePart(
+      now.getDate()
+    )}`,
+    time: `${formatDatePart(now.getHours())}:${formatDatePart(
+      now.getMinutes()
+    )}:${formatDatePart(now.getSeconds())}`,
+  };
+};
+
 const getNextAppointmentNo = async (doctorId, date) => {
   const [appointments, reservedSessions] = await Promise.all([
     appointmentModel.find(
@@ -61,6 +76,7 @@ const getNextAppointmentNo = async (doctorId, date) => {
 
 const createAppointmentFromSession = async (session) => {
   const { doctorId, date, time, type } = session.payload || {};
+  const isChatConsultation = type === "Chat Consultation";
 
   if (!session.userId || !doctorId || !date || !time) {
     throw new Error("Appointment session data is incomplete");
@@ -75,6 +91,20 @@ const createAppointmentFromSession = async (session) => {
 
   if (existingAppointment) {
     throw new Error("This slot is already booked for the selected doctor");
+  }
+
+  if (isChatConsultation) {
+    const appointment = await appointmentModel.create({
+      userId: session.userId,
+      doctorId,
+      date,
+      time,
+      type,
+    });
+
+    session.relatedAppointmentId = appointment._id;
+    session.reservedAppointmentNo = "";
+    return appointment;
   }
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
@@ -291,7 +321,15 @@ export const initiateDonationPayment = async (req, res) => {
 
 export const initiateAppointmentPayment = async (req, res) => {
   try {
-    const { doctorId, date, time, type, amount, doctor, hospital, email, phone } = req.body;
+    const { doctorId, type, amount, doctor, hospital, email, phone } = req.body;
+    let { date, time } = req.body;
+    const isChatConsultation = type === "Chat Consultation";
+
+    if (isChatConsultation && (!date || !time)) {
+      const instantSchedule = buildInstantChatSchedule();
+      date = instantSchedule.date;
+      time = instantSchedule.time;
+    }
 
     if (!req.user?.id) {
       return res.status(401).json({ message: "Please login to continue" });
@@ -317,9 +355,12 @@ export const initiateAppointmentPayment = async (req, res) => {
     const user = await userModel.findById(req.user.id).select("name email phone");
     const nameParts = String(user?.name || "Patient User").trim().split(" ");
 
-    const reservedAppointmentNo = await getNextAppointmentNo(doctorId, date);
-    if (!reservedAppointmentNo) {
-      return res.status(400).json({ message: "Appointment numbers are full (1-100)" });
+    let reservedAppointmentNo = "";
+    if (!isChatConsultation) {
+      reservedAppointmentNo = await getNextAppointmentNo(doctorId, date);
+      if (!reservedAppointmentNo) {
+        return res.status(400).json({ message: "Appointment numbers are full (1-100)" });
+      }
     }
 
     const session = await paymentSessionModel.create({

@@ -320,7 +320,7 @@ function AdminDashboard() {
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50">
                       <tr>
-                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Apt No</th>
+                        <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Reference</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Patient</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Doctor</th>
                         <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Date/Time</th>
@@ -331,7 +331,9 @@ function AdminDashboard() {
                     <tbody className="divide-y divide-slate-200">
                       {appointments.map((item) => (
                         <tr key={item._id} className="hover:bg-slate-50 transition-colors">
-                          <td className="px-6 py-4 text-sm font-medium text-slate-900">{item.appointmentNo || "N/A"}</td>
+                          <td className="px-6 py-4 text-sm font-medium text-slate-900">
+                            {item.type === "Chat Consultation" ? "Instant chat" : item.appointmentNo || "N/A"}
+                          </td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.userId?.name || "N/A"}</td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.doctorId?.name || "N/A"}</td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.date} • {item.time}</td>

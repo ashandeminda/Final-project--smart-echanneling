@@ -4,7 +4,7 @@ const appointmentSchema = new mongoose.Schema(
   {
     appointmentNo: {
       type: String,
-      required: true,
+      required: false,
       index: true,
       sparse: true,
     },
@@ -62,7 +62,10 @@ appointmentSchema.index(
   { doctorId: 1, date: 1, appointmentNo: 1 },
   {
     unique: true,
-    partialFilterExpression: { status: { $in: ["pending", "approved"] } },
+    partialFilterExpression: {
+      status: { $in: ["pending", "approved"] },
+      appointmentNo: { $exists: true, $type: "string" },
+    },
   }
 );
 

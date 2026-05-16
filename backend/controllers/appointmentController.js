@@ -5,6 +5,21 @@ import { sendApprovalEmails } from "../services/emailService.js";
 
 const TELEMEDICINE_TYPES = ["Video Consultation", "Chat Consultation"];
 
+const formatDatePart = (value) => String(value).padStart(2, "0");
+
+const buildInstantChatSchedule = () => {
+  const now = new Date();
+
+  return {
+    date: `${now.getFullYear()}-${formatDatePart(now.getMonth() + 1)}-${formatDatePart(
+      now.getDate()
+    )}`,
+    time: `${formatDatePart(now.getHours())}:${formatDatePart(
+      now.getMinutes()
+    )}:${formatDatePart(now.getSeconds())}`,
+  };
+};
+
 const getNextAppointmentNo = async (doctorId, date) => {
   const appointmentQuery = {
     appointmentNo: { $regex: "^[0-9]+$" },
@@ -42,7 +57,15 @@ const getNextAppointmentNo = async (doctorId, date) => {
 // ================= CREATE APPOINTMENT =================
 export const createAppointment = async (req, res) => {
   try {
-    const { doctorId, date, time, type } = req.body;
+    const { doctorId, type } = req.body;
+    let { date, time } = req.body;
+    const isChatConsultation = type === "Chat Consultation";
+
+    if (isChatConsultation && (!date || !time)) {
+      const instantSchedule = buildInstantChatSchedule();
+      date = instantSchedule.date;
+      time = instantSchedule.time;
+    }
 
     if (!doctorId || !date || !time) {
       return res.status(400).json({
@@ -62,6 +85,22 @@ export const createAppointment = async (req, res) => {
       return res.status(409).json({
         success: false,
         message: "This slot is already booked for the selected doctor",
+      });
+    }
+
+    if (isChatConsultation) {
+      const appointment = await appointmentModel.create({
+        userId: req.user.id,
+        doctorId,
+        date,
+        time,
+        type,
+      });
+
+      return res.status(201).json({
+        success: true,
+        message: "Chat consultation created successfully",
+        appointment,
       });
     }
 

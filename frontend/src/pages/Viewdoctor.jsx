@@ -176,7 +176,7 @@ function Doctors() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 mb-6">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3 gap-x-6 mb-6">
                     <div className="flex items-center gap-2.5 text-slate-600">
                       <div className="w-7 h-7 bg-blue-50 text-blue-600 rounded-full flex items-center justify-center text-[10px] border border-blue-100 shrink-0">📍</div>
                       <span className="font-medium text-[15px]">{doc.hospital || "Not specified"}</span>
@@ -185,10 +185,28 @@ function Doctors() {
                       <div className="w-7 h-7 bg-indigo-50 text-indigo-600 rounded-full flex items-center justify-center text-[10px] border border-indigo-100 shrink-0">⏳</div>
                       <span className="font-medium text-[15px]">{doc.experience || "Not specified"} experience</span>
                     </div>
-                    <div className="flex items-center gap-2.5 text-slate-600 sm:col-span-2">
-                      <div className="w-7 h-7 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-[10px] border border-emerald-100 shrink-0">💸</div>
-                      <span className="font-medium text-[15px]">Consultation Fee: <strong className="text-slate-900">LKR {doc.fee ? Number(doc.fee).toLocaleString() : "N/A"}</strong></span>
+                      <div className="flex items-center gap-2.5 text-slate-600 sm:col-span-2">
+                        <div className="w-7 h-7 bg-emerald-50 text-emerald-600 rounded-full flex items-center justify-center text-[10px] border border-emerald-100 shrink-0">💸</div>
+                        <span className="font-medium text-[15px]">Consultation Fee: <strong className="text-slate-900">LKR {doc.fee ? Number(doc.fee).toLocaleString() : "N/A"}</strong></span>
+                      </div>
                     </div>
+
+                  <div className="flex flex-wrap gap-2 mb-6">
+                    {doc.videoConsultationEnabled && (
+                      <span className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-full border border-blue-100">
+                        Video Consultation
+                      </span>
+                    )}
+                    {doc.chatConsultationEnabled && (
+                      <span className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider rounded-full border border-emerald-100">
+                        Chat Consultation
+                      </span>
+                    )}
+                    {!doc.videoConsultationEnabled && !doc.chatConsultationEnabled && (
+                      <span className="inline-flex items-center px-3 py-1.5 bg-slate-100 text-slate-600 text-xs font-bold uppercase tracking-wider rounded-full border border-slate-200">
+                        In-Person Only
+                      </span>
+                    )}
                   </div>
 
                   <div className="mt-auto">
@@ -204,7 +222,9 @@ function Doctors() {
                             image: doc.image,
                             rating: doc.rating,
                             experience: doc.experience,
-                            patientsCount: doc.patientsCount || 0
+                            patientsCount: doc.patientsCount || 0,
+                            videoConsultationEnabled: Boolean(doc.videoConsultationEnabled),
+                            chatConsultationEnabled: Boolean(doc.chatConsultationEnabled),
                           },
                         })
                       }

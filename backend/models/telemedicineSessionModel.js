@@ -24,9 +24,16 @@ const telemedicineParticipantSchema = new mongoose.Schema(
 const telemedicineSessionSchema = new mongoose.Schema(
   {
     sessionId: { type: String, required: true, unique: true, index: true },
+    status: {
+      type: String,
+      enum: ["active", "completed"],
+      default: "active",
+    },
     participants: { type: [telemedicineParticipantSchema], default: [] },
     signals: { type: [telemedicineSignalSchema], default: [] },
     nextSignalId: { type: Number, default: 1 },
+    endedAt: { type: Date, default: null },
+    endedBy: { type: String, enum: ["doctor", "patient", ""], default: "" },
   },
   { timestamps: true }
 );

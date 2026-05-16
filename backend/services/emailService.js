@@ -45,7 +45,7 @@ const buildMeetingLink = (appointment, frontendHost) => {
       buttonText = "Join Video Call";
     }
   } else if (appointment.type === "Chat Consultation") {
-    meetingLink = `${frontendHost}/chat-consultation?id=${appointment.appointmentNo}`;
+    meetingLink = `${frontendHost}/chat-consultation?id=${appointment._id}`;
     buttonText = "Join Secure Chat";
   }
 
@@ -58,17 +58,27 @@ export const sendApprovalEmails = async (appointment, patient, doctorUser) => {
     const frontendHost = process.env.FRONTEND_URL || "http://localhost:5173";
     const { meetingLink, buttonText } = buildMeetingLink(appointment, frontendHost);
 
+    const referenceLabel =
+      appointment.type === "Chat Consultation" ? "Chat Session ID" : "Appointment Number";
+    const referenceValue =
+      appointment.type === "Chat Consultation"
+        ? String(appointment._id)
+        : appointment.appointmentNo;
+
     const patientMailOptions = {
       from: '"E-Channelling Telemedicine" <no-reply@echanneling.lk>',
       to: patient.email,
-      subject: `Telemedicine Appointment Confirmed: ${appointment.appointmentNo}`,
+      subject:
+        appointment.type === "Chat Consultation"
+          ? "Chat Consultation Confirmed"
+          : `Telemedicine Appointment Confirmed: ${appointment.appointmentNo}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
           <h2>Appointment Confirmed</h2>
           <p>Dear <strong>${patient.name}</strong>,</p>
           <p>Your ${appointment.type.toLowerCase()} has been confirmed. Below are your appointment details:</p>
           <ul style="list-style-type: none; padding-left: 0;">
-            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>${referenceLabel}:</strong> ${referenceValue}</li>
             <li style="margin-bottom: 8px;"><strong>Doctor:</strong> ${appointment.doctorId.name}</li>
             <li style="margin-bottom: 8px;"><strong>Hospital:</strong> ${appointment.doctorId.hospital}</li>
             <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>
@@ -93,14 +103,17 @@ export const sendApprovalEmails = async (appointment, patient, doctorUser) => {
     const doctorMailOptions = {
       from: '"E-Channelling Telemedicine" <no-reply@echanneling.lk>',
       to: doctorUser.email,
-      subject: `New Telemedicine Session Approved: ${appointment.appointmentNo}`,
+      subject:
+        appointment.type === "Chat Consultation"
+          ? "New Chat Consultation Approved"
+          : `New Telemedicine Session Approved: ${appointment.appointmentNo}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
           <h2>Session Approved</h2>
           <p>Dear <strong>${doctorUser.name}</strong>,</p>
           <p>A ${appointment.type.toLowerCase()} has been successfully confirmed. Below are the details:</p>
           <ul style="list-style-type: none; padding-left: 0;">
-            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>${referenceLabel}:</strong> ${referenceValue}</li>
             <li style="margin-bottom: 8px;"><strong>Patient:</strong> ${patient.name}</li>
             <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>
             <li style="margin-bottom: 8px;"><strong>Time:</strong> ${appointment.time}</li>
@@ -150,18 +163,27 @@ export const sendPaymentSuccessEmails = async (appointment, patient, doctorUser)
     const hospitalName =
       appointment?.doctorId?.hospital ||
       "Smart EChanneling";
+    const referenceLabel =
+      appointment.type === "Chat Consultation" ? "Chat Session ID" : "Appointment Number";
+    const referenceValue =
+      appointment.type === "Chat Consultation"
+        ? String(appointment._id)
+        : appointment.appointmentNo;
 
     const patientMailOptions = {
       from: '"Smart EChanneling" <no-reply@echanneling.lk>',
       to: patient.email,
-      subject: `Payment Successful - Appointment ${appointment.appointmentNo}`,
+      subject:
+        appointment.type === "Chat Consultation"
+          ? "Payment Successful - Chat Consultation"
+          : `Payment Successful - Appointment ${appointment.appointmentNo}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
           <h2>Payment Successful</h2>
           <p>Dear <strong>${patient.name}</strong>,</p>
           <p>Your appointment payment was successful. Your appointment has now been created.</p>
           <ul style="list-style-type: none; padding-left: 0;">
-            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>${referenceLabel}:</strong> ${referenceValue}</li>
             <li style="margin-bottom: 8px;"><strong>Doctor:</strong> ${doctorName}</li>
             <li style="margin-bottom: 8px;"><strong>Hospital:</strong> ${hospitalName}</li>
             <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>
@@ -179,14 +201,17 @@ export const sendPaymentSuccessEmails = async (appointment, patient, doctorUser)
     const doctorMailOptions = {
       from: '"Smart EChanneling" <no-reply@echanneling.lk>',
       to: doctorUser.email,
-      subject: `New Paid Appointment - ${appointment.appointmentNo}`,
+      subject:
+        appointment.type === "Chat Consultation"
+          ? "New Paid Chat Consultation"
+          : `New Paid Appointment - ${appointment.appointmentNo}`,
       html: `
         <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
           <h2>New Paid Appointment</h2>
           <p>Dear <strong>${doctorUser.name}</strong>,</p>
           <p>A patient has successfully completed the payment and the appointment is now confirmed.</p>
           <ul style="list-style-type: none; padding-left: 0;">
-            <li style="margin-bottom: 8px;"><strong>Appointment Number:</strong> ${appointment.appointmentNo}</li>
+            <li style="margin-bottom: 8px;"><strong>${referenceLabel}:</strong> ${referenceValue}</li>
             <li style="margin-bottom: 8px;"><strong>Patient:</strong> ${patient.name}</li>
             <li style="margin-bottom: 8px;"><strong>Patient Email:</strong> ${patient.email}</li>
             <li style="margin-bottom: 8px;"><strong>Date:</strong> ${appointment.date}</li>

@@ -27,6 +27,11 @@ const telemedicineService = {
     const response = await api.post("/telemedicine/leave", { sessionId, role });
     return response.data;
   },
+
+  endSession: async (sessionId, role) => {
+    const response = await api.post("/telemedicine/end", { sessionId, role });
+    return response.data;
+  },
 };
 
 export default telemedicineService;

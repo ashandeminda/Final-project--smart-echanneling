@@ -80,6 +80,22 @@ function DoctorAppointments() {
   const currentDateLabel = new Date().toISOString().split("T")[0];
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
+  const getSessionAvailabilityText = (appointment) => {
+    if (appointment.type === "Chat Consultation") {
+      return "Instant chat";
+    }
+
+    return appointment.time || "-";
+  };
+
+  const getReferenceText = (appointment) => {
+    if (appointment.type === "Chat Consultation") {
+      return "Instant chat request";
+    }
+
+    return appointment.appointmentNo || "N/A";
+  };
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -221,6 +237,7 @@ function DoctorAppointments() {
     if (app.type === "Chat Consultation") {
       navigate("/chat-consultation", {
         state: {
+          sessionId: app._id,
           doctor: doctorProfile?.name || user?.name || "Doctor",
           specialty: doctorProfile?.specialization || "",
           appointmentNo: app.appointmentNo,
@@ -486,7 +503,8 @@ function DoctorAppointments() {
 
           <div className="space-y-4">
             {!loading && filtered.map((app) => {
-              const appointmentStart = getAppointmentStart(app.date, app.time);
+              const appointmentStart =
+                app.type === "Chat Consultation" ? null : getAppointmentStart(app.date, app.time);
               const canJoin = !appointmentStart || currentTime >= appointmentStart;
 
               return (
@@ -505,8 +523,8 @@ function DoctorAppointments() {
                          { l: "Email", v: app.userId?.email || "No email" },
                          { l: "Phone", v: app.userId?.phone || "No phone" },
                          { l: "Date", v: app.date },
-                         { l: "Time", v: app.time },
-                         { l: "Ref #", v: app.appointmentNo || "N/A" },
+                         { l: "Time", v: getSessionAvailabilityText(app) },
+                         { l: app.type === "Chat Consultation" ? "Session" : "Ref #", v: getReferenceText(app) },
                          { l: "Type", v: app.type || "In-Person" }
                        ].map((dt, i) => (
                           <div key={i} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl">

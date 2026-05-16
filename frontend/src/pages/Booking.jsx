@@ -64,6 +64,8 @@ function Booking() {
     date: storedBookingState.form?.date || "",
     time: storedBookingState.form?.time || "",
   }));
+  const telemedicineAvailable =
+    Boolean(doctorData.videoConsultationEnabled) || Boolean(doctorData.chatConsultationEnabled);
 
   useEffect(() => {
     setStoredBookingPageState({ doctorData, form });
@@ -181,8 +183,65 @@ function Booking() {
                   <span className="text-sm font-medium">Consultation fee:</span>
                   <strong className="text-xl text-slate-900">LKR {Number(doctorData.fee || 0).toLocaleString()}</strong>
                 </div>
+
+                <div className="flex flex-wrap gap-2 mt-4">
+                  {doctorData.videoConsultationEnabled && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-blue-50 text-blue-700 text-xs font-bold uppercase tracking-wider rounded-full border border-blue-100">
+                      Video Consultation Available
+                    </span>
+                  )}
+                  {doctorData.chatConsultationEnabled && (
+                    <span className="inline-flex items-center px-3 py-1.5 bg-emerald-50 text-emerald-700 text-xs font-bold uppercase tracking-wider rounded-full border border-emerald-100">
+                      Chat Consultation Available
+                    </span>
+                  )}
+                </div>
               </div>
             </div>
+
+            {telemedicineAvailable && (
+              <div className="bg-gradient-to-r from-blue-50 to-emerald-50 border border-blue-100 rounded-3xl p-6 sm:p-7 shadow-sm">
+                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-5">
+                  <div className="max-w-2xl">
+                    <span className="inline-block px-3 py-1 bg-white text-slate-700 font-bold text-[10px] uppercase tracking-widest rounded-full mb-3 border border-slate-200">
+                      Flexible Option
+                    </span>
+                    <h3 className="text-2xl font-extrabold text-slate-900 mb-2">
+                      This doctor also supports telemedicine
+                    </h3>
+                    <p className="text-slate-600 font-medium leading-relaxed">
+                      If visiting the hospital is inconvenient, you can switch to an online consultation and book
+                      video or chat directly from the telemedicine page.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    className="shrink-0 px-7 py-3.5 bg-slate-900 hover:bg-slate-800 text-white font-bold rounded-2xl shadow-md transition-all"
+                    onClick={() =>
+                      navigate("/telemedicine", {
+                        state: {
+                          selectedDoctor: {
+                            _id: doctorData.doctorId,
+                            name: doctorData.doctor,
+                            specialization: doctorData.specialty,
+                            hospital: doctorData.hospital,
+                            fee: doctorData.fee,
+                            image: doctorData.image,
+                            availableDays: [],
+                            videoConsultationEnabled: Boolean(doctorData.videoConsultationEnabled),
+                            chatConsultationEnabled: Boolean(doctorData.chatConsultationEnabled),
+                          },
+                          search: doctorData.doctor || "",
+                        },
+                      })
+                    }
+                  >
+                    Book Online Instead
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Availability Card */}
             <div className="bg-white border border-slate-200 rounded-3xl p-6 sm:p-8 shadow-sm">

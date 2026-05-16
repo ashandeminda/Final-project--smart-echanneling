@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import doctorImg from "../assets/doctor.jpg";
 import doctorService from "../api/doctorService";
 import appointmentService from "../api/appointmentService";
@@ -58,21 +58,42 @@ const formatDisplayDate = (dateValue) => {
   });
 };
 
+const formatDatePart = (value) => String(value).padStart(2, "0");
+
+const buildInstantChatSchedule = () => {
+  const now = new Date();
+
+  return {
+    day: now.toLocaleDateString("en-US", { weekday: "long" }),
+    date: `${now.getFullYear()}-${formatDatePart(now.getMonth() + 1)}-${formatDatePart(
+      now.getDate()
+    )}`,
+    time: `${formatDatePart(now.getHours())}:${formatDatePart(
+      now.getMinutes()
+    )}:${formatDatePart(now.getSeconds())}`,
+  };
+};
+
 function TelemedicineFull() {
   const navigate = useNavigate();
+  const location = useLocation();
   const { isAuthenticated } = useAuth();
   const storedDraft = useMemo(() => getStoredTelemedicineBookingDraft(), []);
+  const incomingState = location.state || {};
 
-  const [sessionType, setSessionType] = useState(storedDraft.sessionType || "");
-  const [selectedDoctor, setSelectedDoctor] = useState(storedDraft.selectedDoctor || null);
+  const [sessionType, setSessionType] = useState(incomingState.sessionType || storedDraft.sessionType || "");
+  const [selectedDoctor, setSelectedDoctor] = useState(
+    incomingState.selectedDoctor || storedDraft.selectedDoctor || null
+  );
   const [selectedSlot, setSelectedSlot] = useState(
     storedDraft.selectedSlot || { day: "", time: "", date: "" }
   );
-  const [search, setSearch] = useState(storedDraft.search || "");
+  const [search, setSearch] = useState(incomingState.search || storedDraft.search || "");
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
   const [nextAppointmentNo, setNextAppointmentNo] = useState(null);
+  const isChatConsultation = sessionType === "Chat Consultation";
 
   useEffect(() => {
     if (!selectedDoctor?._id || doctors.length === 0) {
@@ -96,12 +117,21 @@ function TelemedicineFull() {
 
   useEffect(() => {
     let isActive = true;
+    if (isChatConsultation) {
+      setNextAppointmentNo(null);
+      return () => {
+        isActive = false;
+      };
+    }
+    const nextNumberDate = isChatConsultation
+      ? buildInstantChatSchedule().date
+      : selectedSlot.date;
 
-    if (selectedDoctor?._id && selectedSlot.date) {
+    if (selectedDoctor?._id && nextNumberDate) {
       setNextAppointmentNo(null);
 
       appointmentService
-        .getNextAppointmentNumber(selectedDoctor._id, selectedSlot.date)
+        .getNextAppointmentNumber(selectedDoctor._id, nextNumberDate)
         .then((res) => {
           if (isActive && res.success) setNextAppointmentNo(res.appointmentNo);
         })
@@ -113,7 +143,7 @@ function TelemedicineFull() {
     return () => {
       isActive = false;
     };
-  }, [selectedDoctor, selectedSlot.date]);
+  }, [isChatConsultation, selectedDoctor, selectedSlot.date]);
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -193,8 +223,18 @@ function TelemedicineFull() {
   const readiness = [
     { label: "Consultation Mode", done: Boolean(sessionType) },
     { label: "Doctor Selection", done: Boolean(selectedDoctor?._id) },
-    { label: "Meeting Slot", done: Boolean(selectedSlot.date && selectedSlot.time) },
-    { label: "Payment", done: !needsPayment || Boolean(selectedDoctor?._id && selectedSlot.date && selectedSlot.time) },
+    {
+      label: isChatConsultation ? "Instant Request" : "Meeting Slot",
+      done: isChatConsultation || Boolean(selectedSlot.date && selectedSlot.time),
+    },
+    {
+      label: "Payment",
+      done:
+        !needsPayment ||
+        Boolean(
+          selectedDoctor?._id && (isChatConsultation || (selectedSlot.date && selectedSlot.time))
+        ),
+    },
   ];
 
   const completedCount = readiness.filter((item) => item.done).length;
@@ -224,13 +264,16 @@ function TelemedicineFull() {
       return;
     }
 
-    if (!selectedSlot.date || !selectedSlot.time) {
+    if (!isChatConsultation && (!selectedSlot.date || !selectedSlot.time)) {
       alert("Please select an appointment time");
       return;
     }
 
     try {
       setSubmitting(true);
+      const bookingSchedule = isChatConsultation
+        ? buildInstantChatSchedule()
+        : selectedSlot;
 
       if (needsPayment) {
         const paymentState = {
@@ -239,20 +282,21 @@ function TelemedicineFull() {
           specialty: selectedDoctor.specialization || "",
           hospital: selectedDoctor.hospital || "",
           fee: consultationFee,
-          date: selectedSlot.date,
-          day: selectedSlot.day,
-          time: selectedSlot.time,
+          date: bookingSchedule.date,
+          day: bookingSchedule.day,
+          time: bookingSchedule.time,
           type: sessionType,
           source: "telemedicine",
           returnPath: "/telemedicine",
+          isInstantChat: isChatConsultation,
         };
 
         setStoredAppointmentPaymentData(paymentState);
 
         const response = await paymentService.initiateAppointmentPayment({
           doctorId: selectedDoctor._id,
-          date: selectedSlot.date,
-          time: selectedSlot.time,
+          date: bookingSchedule.date,
+          time: bookingSchedule.time,
           type: sessionType,
           amount: consultationFee,
           doctor: selectedDoctor.name || "",
@@ -269,13 +313,17 @@ function TelemedicineFull() {
 
       const data = await appointmentService.createAppointment({
         doctorId: selectedDoctor._id,
-        date: selectedSlot.date,
-        time: selectedSlot.time,
+        date: bookingSchedule.date,
+        time: bookingSchedule.time,
         type: sessionType,
       });
 
       const appointmentNo = data?.appointment?.appointmentNo || data?.appointmentNo || "N/A";
-      alert(`Consultation booked successfully!\nAppointment No: ${appointmentNo}`);
+      alert(
+        isChatConsultation
+          ? "Chat consultation request sent successfully!"
+          : `Consultation booked successfully!\nAppointment No: ${appointmentNo}`
+      );
       navigate("/myappoinment");
     } catch (err) {
       console.error("Booking failed:", err);
@@ -423,7 +471,8 @@ function TelemedicineFull() {
               </div>
             </div>
 
-            <div className="bg-white border-2 border-slate-200 rounded-[2rem] p-8 shadow-sm">
+            {!isChatConsultation && (
+              <div className="bg-white border-2 border-slate-200 rounded-[2rem] p-8 shadow-sm">
               <div className="mb-6">
                 <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-widest rounded-full mb-3 border border-slate-200">
                   Step 3
@@ -470,7 +519,26 @@ function TelemedicineFull() {
                   </div>
                 ))}
               </div>
-            </div>
+              </div>
+            )}
+
+            {isChatConsultation && (
+              <div className="bg-white border-2 border-slate-200 rounded-[2rem] p-8 shadow-sm">
+                <div className="mb-6">
+                  <span className="inline-block px-3 py-1 bg-slate-100 text-slate-600 font-bold text-[10px] uppercase tracking-widest rounded-full mb-3 border border-slate-200">
+                    Step 3
+                  </span>
+                  <h2 className="text-2xl font-extrabold text-slate-900">Instant chat request</h2>
+                </div>
+
+                <div className="bg-emerald-50 border border-emerald-200 text-emerald-900 p-6 rounded-2xl">
+                  <p className="font-bold mb-2">No time slot needed for chat consultation.</p>
+                  <p className="text-sm font-medium leading-relaxed text-emerald-700">
+                    Select your doctor and continue. After approval, the patient and doctor can open the chat directly from their appointment dashboards.
+                  </p>
+                </div>
+              </div>
+            )}
 
             {needsPayment && (
               <div className="bg-slate-50 border-2 border-slate-300 rounded-[2rem] p-8 shadow-sm shadow-blue-900/5">
@@ -531,10 +599,12 @@ function TelemedicineFull() {
                   <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Consultation</span>
                   <strong className="text-[15px]">{sessionType || "Not selected"}</strong>
                 </div>
-                <div className="flex flex-col gap-1">
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Appointment No</span>
-                  <strong className="text-[15px] text-blue-400">{nextAppointmentNo || "-"}</strong>
-                </div>
+                {!isChatConsultation && (
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Appointment No</span>
+                    <strong className="text-[15px] text-blue-400">{nextAppointmentNo || "-"}</strong>
+                  </div>
+                )}
                 <div className="flex flex-col gap-1">
                   <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Doctor</span>
                   <strong className="text-[15px]">{selectedDoctor?.name || "Not selected"}</strong>
@@ -550,9 +620,15 @@ function TelemedicineFull() {
                   </div>
                 </div>
                 <div className="flex flex-col gap-1 pt-4 border-t border-white/10">
-                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">Time</span>
+                  <span className="text-[11px] font-bold uppercase tracking-widest text-slate-400">
+                    {isChatConsultation ? "Chat Access" : "Time"}
+                  </span>
                   <strong className="text-[15px] text-blue-300">
-                    {selectedSlot.day && selectedSlot.time ? `${selectedSlot.day} - ${selectedSlot.time}` : "Not selected"}
+                    {isChatConsultation
+                      ? "Starts after doctor approval"
+                      : selectedSlot.day && selectedSlot.time
+                        ? `${selectedSlot.day} - ${selectedSlot.time}`
+                        : "Not selected"}
                   </strong>
                 </div>
                 <div className="flex justify-between items-end pt-4 border-t border-white/10">

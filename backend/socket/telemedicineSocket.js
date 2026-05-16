@@ -1,5 +1,10 @@
 import JWT from "jsonwebtoken";
 import userModel from "../models/userModel.js";
+import {
+  appendTelemedicineSignal,
+  getOrCreateTelemedicineSession,
+  normalizeTelemedicineRole,
+} from "../services/telemedicineSessionService.js";
 
 const getSocketUser = async (socket) => {
   const token = socket.handshake.auth?.token;
@@ -42,12 +47,7 @@ export const registerTelemedicineSocket = (io) => {
     socket.on("telemedicine:join", ({ sessionId, role }) => {
       if (!sessionId) return;
 
-      const normalizedRole =
-        role === "doctor" || role === "patient"
-          ? role
-          : socket.user.role === "doctor"
-            ? "doctor"
-            : "patient";
+      const normalizedRole = normalizeTelemedicineRole(role, socket.user.role);
 
       socket.data.sessionId = sessionId;
       socket.data.role = normalizedRole;
@@ -65,15 +65,81 @@ export const registerTelemedicineSocket = (io) => {
       });
     });
 
-    socket.on("telemedicine:chat-message", ({ sessionId, text, time }) => {
+    socket.on("telemedicine:chat-message", async ({ sessionId, text, time }) => {
       if (!sessionId || !text?.trim()) return;
 
-      io.to(sessionId).emit("telemedicine:chat-message", {
-        id: `${socket.id}-${Date.now()}`,
-        role: socket.data.role || (socket.user.role === "doctor" ? "doctor" : "patient"),
-        text: text.trim(),
-        time,
-      });
+      const normalizedRole =
+        socket.data.role || normalizeTelemedicineRole(undefined, socket.user.role);
+
+      try {
+        const session = await getOrCreateTelemedicineSession(sessionId);
+        if (session.status === "completed") {
+          socket.emit("telemedicine:session-ended", {
+            endedBy: session.endedBy || "doctor",
+            endedAt: session.endedAt,
+          });
+          return;
+        }
+
+        const signalId = appendTelemedicineSignal(session, {
+          role: normalizedRole,
+          signalType: "chat-message",
+          payload: {
+            text: text.trim(),
+            time,
+          },
+        });
+        await session.save();
+
+        io.to(sessionId).emit("telemedicine:chat-message", {
+          id: signalId,
+          role: normalizedRole,
+          text: text.trim(),
+          time,
+        });
+      } catch {
+        socket.emit("telemedicine:error", {
+          message: "Unable to send the message right now",
+        });
+      }
+    });
+
+    socket.on("telemedicine:end-session", async ({ sessionId }) => {
+      if (!sessionId) return;
+
+      const normalizedRole =
+        socket.data.role || normalizeTelemedicineRole(undefined, socket.user.role);
+
+      if (normalizedRole !== "doctor") {
+        socket.emit("telemedicine:error", {
+          message: "Only doctors can end consultations",
+        });
+        return;
+      }
+
+      try {
+        const session = await getOrCreateTelemedicineSession(sessionId);
+        if (session.status !== "completed") {
+          session.status = "completed";
+          session.endedAt = new Date();
+          session.endedBy = "doctor";
+          appendTelemedicineSignal(session, {
+            role: "doctor",
+            signalType: "session-ended",
+            payload: { endedBy: "doctor" },
+          });
+          await session.save();
+        }
+
+        io.to(sessionId).emit("telemedicine:session-ended", {
+          endedBy: session.endedBy || "doctor",
+          endedAt: session.endedAt,
+        });
+      } catch {
+        socket.emit("telemedicine:error", {
+          message: "Unable to end the consultation right now",
+        });
+      }
     });
 
     socket.on("telemedicine:leave", ({ sessionId }) => {

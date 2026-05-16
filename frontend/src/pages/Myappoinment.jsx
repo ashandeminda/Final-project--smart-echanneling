@@ -19,6 +19,22 @@ function MyAppointment() {
   const [cancellingId, setCancellingId] = useState("");
   const [currentTime, setCurrentTime] = useState(() => new Date());
 
+  const getSessionAvailabilityText = (appointment) => {
+    if (appointment.type === "Chat Consultation") {
+      return "Instant chat";
+    }
+
+    return appointment.time || "-";
+  };
+
+  const getReferenceText = (appointment) => {
+    if (appointment.type === "Chat Consultation") {
+      return "Instant chat request";
+    }
+
+    return appointment.appointmentNo || "N/A";
+  };
+
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
@@ -50,6 +66,7 @@ function MyAppointment() {
     if (app.type === "Chat Consultation") {
       navigate("/chat-consultation", {
         state: {
+          sessionId: app._id,
           doctor: app.doctorId?.name,
           specialty: app.doctorId?.specialization,
           appointmentNo: app.appointmentNo,
@@ -167,7 +184,8 @@ function MyAppointment() {
         ) : (
           <div className="space-y-4">
             {!loading && filtered.map((app) => {
-              const appointmentStart = getAppointmentStart(app.date, app.time);
+              const appointmentStart =
+                app.type === "Chat Consultation" ? null : getAppointmentStart(app.date, app.time);
               const canJoin = !appointmentStart || currentTime >= appointmentStart;
 
               return (
@@ -183,7 +201,10 @@ function MyAppointment() {
                     <div className="flex flex-wrap justify-between items-start gap-4 mb-4">
                       <div>
                         <h4 className="text-xl sm:text-2xl font-bold text-slate-900 mb-1">{app.doctorId?.name || "Doctor"}</h4>
-                        <p className="text-sm font-semibold text-slate-500">Appointment Number: <span className="text-slate-800">{app.appointmentNo || "N/A"}</span></p>
+                        <p className="text-sm font-semibold text-slate-500">
+                          {app.type === "Chat Consultation" ? "Session:" : "Appointment Number:"}{" "}
+                          <span className="text-slate-800">{getReferenceText(app)}</span>
+                        </p>
                       </div>
                       <StatusBadge status={app.status} />
                     </div>
@@ -195,7 +216,7 @@ function MyAppointment() {
                         {app.date}
                       </span>
                       <span className="inline-flex items-center px-4 py-1.5 bg-slate-100 text-slate-700 text-sm font-bold rounded-lg border border-slate-200">
-                        {app.time}
+                        {getSessionAvailabilityText(app)}
                       </span>
                       <span className="inline-flex items-center px-4 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wider border border-indigo-100 ml-auto sm:ml-0">
                         {app.type || "In-Person"}

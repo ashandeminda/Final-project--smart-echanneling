@@ -64,6 +64,7 @@ function AppointmentPayment() {
   const [error, setError] = useState("");
   const [successData, setSuccessData] = useState(null);
   const [appointmentNumber, setAppointmentNumber] = useState(null);
+  const isInstantChat = bookingData.type === "Chat Consultation" && bookingData.isInstantChat;
 
   useEffect(() => {
     if (location.state && Object.keys(location.state).length > 0) {
@@ -107,6 +108,13 @@ function AppointmentPayment() {
       };
     }
 
+    if (isInstantChat) {
+      setAppointmentNumber(null);
+      return () => {
+        isActive = false;
+      };
+    }
+
     if (bookingData.doctorId && bookingData.date) {
       setAppointmentNumber(null);
 
@@ -125,7 +133,7 @@ function AppointmentPayment() {
     return () => {
       isActive = false;
     };
-  }, [bookingData.date, bookingData.doctorId, stripeSessionId]);
+  }, [bookingData.date, bookingData.doctorId, isInstantChat, stripeSessionId]);
 
   useEffect(() => {
     if (successData) {
@@ -230,7 +238,9 @@ function AppointmentPayment() {
                 <span className="inline-flex items-center rounded-full bg-emerald-100 text-emerald-700 px-3 py-1 text-xs font-bold uppercase tracking-wider">
                   Confirmed
                 </span>
-                <p className="text-slate-400 text-xs font-semibold mt-2">No. {appointmentNo}</p>
+                {!isInstantChat && (
+                  <p className="text-slate-400 text-xs font-semibold mt-2">No. {appointmentNo}</p>
+                )}
               </div>
             </div>
 
@@ -241,10 +251,12 @@ function AppointmentPayment() {
                 <p className="text-slate-500 text-sm mt-1">{appointmentHospital}</p>
               </div>
 
-              <div className="rounded-2xl bg-white border border-slate-200 p-4">
-                <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Appointment No</p>
-                <strong className="text-slate-900 text-lg">{appointmentNo}</strong>
-              </div>
+              {!isInstantChat && (
+                <div className="rounded-2xl bg-white border border-slate-200 p-4">
+                  <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Appointment No</p>
+                  <strong className="text-slate-900 text-lg">{appointmentNo}</strong>
+                </div>
+              )}
 
               <div className="rounded-2xl bg-white border border-slate-200 p-4">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Type</p>
@@ -259,7 +271,9 @@ function AppointmentPayment() {
 
               <div className="rounded-2xl bg-white border border-slate-200 p-4">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Time</p>
-                <strong className="text-slate-900 text-lg">{appointmentTime || "-"}</strong>
+                <strong className="text-slate-900 text-lg">
+                  {appointmentType === "Chat Consultation" ? "Instant chat" : appointmentTime || "-"}
+                </strong>
               </div>
 
               <div className="rounded-2xl bg-white border border-slate-200 p-4 sm:col-span-2">
@@ -331,10 +345,12 @@ function AppointmentPayment() {
             <h3 className="text-xl font-bold text-slate-900">Appointment Summary</h3>
 
             <div className="flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Appointment No</span>
-                <strong className="text-blue-600 text-base">{appointmentNumber || "Fetching..."}</strong>
-              </div>
+              {!isInstantChat && (
+                <div className="flex flex-col gap-1">
+                  <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Appointment No</span>
+                  <strong className="text-blue-600 text-base">{appointmentNumber || "Fetching..."}</strong>
+                </div>
+              )}
 
               <div className="flex flex-col gap-1">
                 <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Doctor</span>
@@ -347,9 +363,13 @@ function AppointmentPayment() {
               </div>
 
               <div className="flex flex-col gap-1">
-                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">Time Slot</span>
+                <span className="text-slate-500 text-xs font-bold uppercase tracking-wider">
+                  {isInstantChat ? "Chat Access" : "Time Slot"}
+                </span>
                 <strong className="text-slate-900 text-base">
-                  {bookingData.day || "-"} {bookingData.time ? `- ${bookingData.time}` : ""}
+                  {isInstantChat
+                    ? "Instant chat after doctor approval"
+                    : `${bookingData.day || "-"}${bookingData.time ? ` - ${bookingData.time}` : ""}`}
                 </strong>
               </div>
 
