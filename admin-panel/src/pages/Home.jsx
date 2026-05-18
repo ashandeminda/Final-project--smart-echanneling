@@ -119,7 +119,7 @@ const Home = () => {
                         <div>
                           <div className="flex items-center gap-2 mb-1 flex-wrap">
                             <strong className="text-gray-900 text-sm">{a.doctorId?.name || "Doctor"}</strong>
-                            <span className="text-gray-500 text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-semibold">
+                            <span className="text-xs bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full font-semibold">
                               {a.doctorId?.specialization || "General"}
                             </span>
                           </div>

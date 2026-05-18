@@ -32,7 +32,7 @@ function Home() {
               Make an Appointment
             </button>
             <button
-              onClick={() => navigate("/symptom-checker")}
+              onClick={() => navigate("/symptomchecker")}
               className="w-full sm:w-auto px-8 py-4 bg-white/5 hover:bg-white/10 backdrop-blur-md border border-white/10 text-white font-semibold rounded-full shadow-lg transition-all duration-300 transform hover:-translate-y-1"
             >
               AI Symptom Checker

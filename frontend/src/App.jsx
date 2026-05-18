@@ -45,6 +45,7 @@ function App() {
         <Route path='/register' element={<Register />} />
         <Route path='/hospitals' element={<Hospitals />} />
         <Route path='/symptomchecker' element={<Symptomchecker />} />
+        <Route path='/symptom-checker' element={<Symptomchecker />} />
         <Route path='/telemedicine' element={<TelemedicineFull />} />
         <Route path='/charity' element={<Charity />} />
         <Route path='/donate' element={<Donate />} />
