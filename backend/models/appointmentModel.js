@@ -51,15 +51,7 @@ const appointmentSchema = new mongoose.Schema(
 );
 
 appointmentSchema.index(
-  { doctorId: 1, date: 1, time: 1 },
-  {
-    unique: true,
-    partialFilterExpression: { status: { $in: ["pending", "approved"] } },
-  }
-);
-
-appointmentSchema.index(
-  { doctorId: 1, date: 1, appointmentNo: 1 },
+  { doctorId: 1, date: 1, time: 1, type: 1, appointmentNo: 1 },
   {
     unique: true,
     partialFilterExpression: {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import appointmentService from "../api/appointmentService";
 import { useAuth } from "../context/useAuth";
+import { formatDisplayTime } from "../utils/timeFormat";
 
 const getAppointmentStart = (date, time) => {
   if (!date || !time) return null;
@@ -24,7 +25,7 @@ function MyAppointment() {
       return "Instant chat";
     }
 
-    return appointment.time || "-";
+    return formatDisplayTime(appointment.time);
   };
 
   const getReferenceText = (appointment) => {
@@ -232,7 +233,7 @@ function MyAppointment() {
                             className="w-full px-5 py-3 bg-slate-900 hover:bg-slate-800 text-white shadow-md shadow-slate-900/10 text-sm font-bold rounded-xl transition-all disabled:opacity-50 disabled:shadow-none"
                             onClick={() => handleJoin(app)}
                             disabled={!canJoin}
-                            title={!canJoin ? `Available at ${app.time} on ${app.date}` : ""}
+                            title={!canJoin ? `Available at ${formatDisplayTime(app.time)} on ${app.date}` : ""}
                           >
                             {app.type === "Video Consultation"
                               ? app.meetingProvider === "teams"

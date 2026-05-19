@@ -237,3 +237,56 @@ export const sendPaymentSuccessEmails = async (appointment, patient, doctorUser)
     console.error("Error sending payment success emails:", error);
   }
 };
+
+export const sendDonationSuccessEmail = async (donation, donor = {}) => {
+  try {
+    if (!donor.email) {
+      return;
+    }
+
+    const t = await initTransporter();
+    const frontendHost = process.env.FRONTEND_URL || "http://localhost:5173";
+    const donorName = donation?.isAnonymous ? "Donor" : donor.name || donation?.name || "Donor";
+    const campaignLabels = {
+      "child-healthcare": "Child Healthcare",
+      "cancer-treatment": "Cancer Treatment",
+      "emergency-aid": "Emergency Aid",
+      "senior-care": "Senior Care",
+      general: "General Healthcare Support",
+    };
+
+    const patientMailOptions = {
+      from: '"Smart EChanneling" <no-reply@echanneling.lk>',
+      to: donor.email,
+      subject: "Thank You for Your Donation",
+      html: `
+        <div style="font-family: Arial, sans-serif; padding: 20px; max-width: 600px; margin: auto;">
+          <h2>Thank You for Your Donation</h2>
+          <p>Dear <strong>${donorName}</strong>,</p>
+          <p>We have successfully received your donation. Thank you for supporting healthcare services through Smart EChanneling.</p>
+          <ul style="list-style-type: none; padding-left: 0;">
+            <li style="margin-bottom: 8px;"><strong>Amount:</strong> LKR ${Number(donation?.amount || 0).toLocaleString()}</li>
+            <li style="margin-bottom: 8px;"><strong>Campaign:</strong> ${campaignLabels[donation?.campaignKey] || "General Healthcare Support"}</li>
+            <li style="margin-bottom: 8px;"><strong>Status:</strong> Completed</li>
+          </ul>
+          <div style="margin: 30px 0;">
+            <a href="${frontendHost}/charity" style="background-color: #0f172a; color: #ffffff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; display: inline-block;">View Charity Page</a>
+          </div>
+          <p>Your contribution helps us continue supporting patients in need.</p>
+          <p>Thank you once again.</p>
+        </div>
+      `,
+    };
+
+    const donorInfo = await t.sendMail(patientMailOptions);
+
+    console.log("---------------------------------------");
+    console.log("DONATION CONFIRMATION EMAIL SENT");
+    if (!process.env.SMTP_USER) {
+      console.log("Donor Preview URL: %s", nodemailer.getTestMessageUrl(donorInfo));
+    }
+    console.log("---------------------------------------");
+  } catch (error) {
+    console.error("Error sending donation success email:", error);
+  }
+};

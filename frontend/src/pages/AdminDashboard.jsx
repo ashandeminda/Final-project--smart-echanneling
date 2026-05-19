@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import api from "../api/axios";
 import { useAuth } from "../context/useAuth";
+import { formatDisplayTime } from "../utils/timeFormat";
 
 const initialDoctorForm = {
   name: "",
@@ -20,6 +21,9 @@ const initialHospitalForm = {
   location: "",
   rating: "",
 };
+
+const isTelemedicineAppointment = (appointment) =>
+  appointment?.type === "Video Consultation" || appointment?.type === "Chat Consultation";
 
 function AdminDashboard() {
   const navigate = useNavigate();
@@ -42,6 +46,10 @@ function AdminDashboard() {
   const [hospitalForm, setHospitalForm] = useState(initialHospitalForm);
   const [doctorImage, setDoctorImage] = useState(null);
   const [hospitalImage, setHospitalImage] = useState(null);
+  const physicalAppointments = appointments.filter(
+    (item) => !isTelemedicineAppointment(item)
+  );
+  const telemedicineAppointments = appointments.filter(isTelemedicineAppointment);
 
   const loadAdminData = async () => {
     try {
@@ -294,7 +302,7 @@ function AdminDashboard() {
                         <div>
                           <strong className="text-lg text-slate-800 block mb-1">{item.doctorId?.name || "Doctor"}</strong>
                           <p className="text-slate-500 text-sm">
-                            Patient: <span className="font-medium text-slate-700">{item.userId?.name || "N/A"}</span> • {item.date} • {item.time}
+                            Patient: <span className="font-medium text-slate-700">{item.userId?.name || "N/A"}</span> • {item.date} • {formatDisplayTime(item.time)}
                           </p>
                         </div>
                         <StatusBadge status={item.status} />
@@ -316,7 +324,75 @@ function AdminDashboard() {
                     Appointment approval is handled by the assigned doctor. Admin can monitor status changes here.
                   </p>
                 </div>
-                <div className="overflow-x-auto rounded-2xl border border-slate-200">
+                <div className="space-y-6 mb-6">
+                  {[
+                    {
+                      title: "Physical Appointments",
+                      description: "In-person hospital bookings.",
+                      items: physicalAppointments,
+                      tone: "emerald",
+                      empty: "No physical appointments found.",
+                    },
+                    {
+                      title: "Telemedicine Appointments",
+                      description: "Video and chat consultations.",
+                      items: telemedicineAppointments,
+                      tone: "blue",
+                      empty: "No telemedicine appointments found.",
+                    },
+                  ].map((section) => (
+                    <div key={section.title} className="rounded-2xl border border-slate-200 overflow-hidden">
+                      <div className="px-6 py-5 border-b border-slate-200 flex items-center justify-between gap-4 bg-slate-50">
+                        <div>
+                          <h3 className="text-lg font-bold text-slate-900">{section.title}</h3>
+                          <p className="text-sm text-slate-500">{section.description}</p>
+                        </div>
+                        <span className={`px-3 py-1 rounded-full text-xs font-bold border ${
+                          section.tone === "blue"
+                            ? "bg-blue-50 text-blue-700 border-blue-100"
+                            : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                        }`}>
+                          {section.items.length} Total
+                        </span>
+                      </div>
+
+                      {section.items.length ? (
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse">
+                            <thead className="bg-slate-50">
+                              <tr>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Reference</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Patient</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Doctor</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Date/Time</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Type</th>
+                                <th className="px-6 py-4 text-xs font-bold text-slate-500 uppercase tracking-wider border-b border-slate-200">Status</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-200">
+                              {section.items.map((item) => (
+                                <tr key={item._id} className="hover:bg-slate-50 transition-colors">
+                                  <td className="px-6 py-4 text-sm font-medium text-slate-900">
+                                    {item.type === "Chat Consultation" ? "Instant chat" : item.appointmentNo || "N/A"}
+                                  </td>
+                                  <td className="px-6 py-4 text-sm text-slate-600">{item.userId?.name || "N/A"}</td>
+                                  <td className="px-6 py-4 text-sm text-slate-600">{item.doctorId?.name || "N/A"}</td>
+                                  <td className="px-6 py-4 text-sm text-slate-600">{item.date} â€¢ {formatDisplayTime(item.time)}</td>
+                                  <td className="px-6 py-4 text-sm text-slate-600">{item.type || "In-Person"}</td>
+                                  <td className="px-6 py-4"><StatusBadge status={item.status} /></td>
+                                </tr>
+                              ))}
+                            </tbody>
+                          </table>
+                        </div>
+                      ) : (
+                        <div className="p-8 text-center text-slate-500 font-medium">{section.empty}</div>
+                      )}
+                    </div>
+                  ))}
+                </div>
+
+                <div className="hidden overflow-x-auto rounded-2xl border border-slate-200">
                   <table className="w-full text-left border-collapse">
                     <thead className="bg-slate-50">
                       <tr>
@@ -336,7 +412,7 @@ function AdminDashboard() {
                           </td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.userId?.name || "N/A"}</td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.doctorId?.name || "N/A"}</td>
-                          <td className="px-6 py-4 text-sm text-slate-600">{item.date} • {item.time}</td>
+                          <td className="px-6 py-4 text-sm text-slate-600">{item.date} • {formatDisplayTime(item.time)}</td>
                           <td className="px-6 py-4 text-sm text-slate-600">{item.type || "In-Person"}</td>
                           <td className="px-6 py-4"><StatusBadge status={item.status} /></td>
                         </tr>

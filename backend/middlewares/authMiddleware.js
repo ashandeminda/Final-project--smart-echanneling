@@ -36,6 +36,39 @@ export const requireSignIn = async (req, res, next) => {
   }
 };
 
+export const attachUserIfPresent = async (req, res, next) => {
+  try {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+      return next();
+    }
+
+    const token = authHeader.split(" ")[1];
+    const decoded = JWT.verify(token, process.env.JWT_SECRET);
+    const userId = decoded.id || decoded._id;
+
+    if (!userId) {
+      return next();
+    }
+
+    const user = await userModel.findById(userId).select("role");
+    if (!user) {
+      return next();
+    }
+
+    req.user = {
+      ...decoded,
+      id: userId,
+      role: user.role,
+    };
+  } catch {
+    // Ignore invalid optional auth headers for public routes.
+  }
+
+  next();
+};
+
 // Check if logged-in user has admin role
 export const requireAdmin = (req, res, next) => {
   if (req.user.role !== "admin") {

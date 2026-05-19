@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { useLocation, useNavigate } from "react-router-dom";
 import doctorImg from "../assets/doctor.jpg";
 import doctorService from "../api/doctorService";
@@ -6,12 +6,13 @@ import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
 import { useAuth } from "../context/useAuth";
 import {
-  getStoredTelemedicineBookingDraft,
+  clearStoredAppointmentPaymentData,
+  getStoredAppointmentPaymentData,
   setStoredAppointmentPaymentData,
-  setStoredTelemedicineBookingDraft,
 } from "../utils/paymentBookingStorage";
+import { formatDisplayTime } from "../utils/timeFormat";
 
-const defaultTimeSlots = ["09:00", "10:00", "11:00", "14:00"];
+const defaultTimeSlots = ["15:00", "16:00", "17:00"];
 
 const dayIndexMap = {
   Sunday: 0,
@@ -78,22 +79,55 @@ function TelemedicineFull() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
-  const storedDraft = useMemo(() => getStoredTelemedicineBookingDraft(), []);
-  const incomingState = location.state || {};
+  const storedPaymentData = useMemo(() => getStoredAppointmentPaymentData(), []);
+  const incomingState = useMemo(() => {
+    if (location.state && Object.keys(location.state).length > 0) {
+      return location.state;
+    }
 
-  const [sessionType, setSessionType] = useState(incomingState.sessionType || storedDraft.sessionType || "");
-  const [selectedDoctor, setSelectedDoctor] = useState(
-    incomingState.selectedDoctor || storedDraft.selectedDoctor || null
+    if (
+      storedPaymentData?.returnPath === "/telemedicine" &&
+      storedPaymentData?.source === "telemedicine" &&
+      storedPaymentData?.fromPaymentReturn
+    ) {
+      return storedPaymentData;
+    }
+
+    return {};
+  }, [location.state, storedPaymentData]);
+  const isReturningFromPayment =
+    incomingState.source === "telemedicine" &&
+    incomingState.returnPath === "/telemedicine" &&
+    Boolean(incomingState.fromPaymentReturn);
+  const initialSelectedSlot = useMemo(
+    () =>
+      isReturningFromPayment
+        ? {
+            day: incomingState.day || "",
+            time: incomingState.time || "",
+            date: incomingState.date || "",
+          }
+        : { day: "", time: "", date: "" },
+    [incomingState.date, incomingState.day, incomingState.time, isReturningFromPayment]
   );
-  const [selectedSlot, setSelectedSlot] = useState(
-    storedDraft.selectedSlot || { day: "", time: "", date: "" }
+
+  const [sessionType, setSessionType] = useState(
+    isReturningFromPayment ? incomingState.type || "" : incomingState.sessionType || ""
   );
-  const [search, setSearch] = useState(incomingState.search || storedDraft.search || "");
+  const [selectedDoctor, setSelectedDoctor] = useState(incomingState.selectedDoctor || null);
+  const [selectedSlot, setSelectedSlot] = useState(initialSelectedSlot);
+  const [search, setSearch] = useState(incomingState.search || "");
   const [doctors, setDoctors] = useState([]);
   const [loading, setLoading] = useState(true);
   const [submitting, setSubmitting] = useState(false);
-  const [nextAppointmentNo, setNextAppointmentNo] = useState(null);
+  const [nextAppointmentNo, setNextAppointmentNo] = useState(
+    isReturningFromPayment ? incomingState.reservedAppointmentNo || null : null
+  );
+  const previewRequestKeyRef = useRef("");
   const isChatConsultation = sessionType === "Chat Consultation";
+  const selectedDoctorId = selectedDoctor?._id || "";
+  const selectedTime = isChatConsultation ? buildInstantChatSchedule().time : selectedSlot.time;
+  const previewDate = isChatConsultation ? buildInstantChatSchedule().date : selectedSlot.date;
 
   useEffect(() => {
     if (!selectedDoctor?._id || doctors.length === 0) {
@@ -107,43 +141,88 @@ function TelemedicineFull() {
   }, [doctors, selectedDoctor]);
 
   useEffect(() => {
-    setStoredTelemedicineBookingDraft({
-      sessionType,
-      selectedDoctor,
-      selectedSlot,
-      search,
-    });
-  }, [search, selectedDoctor, selectedSlot, sessionType]);
+    setSessionType(isReturningFromPayment ? incomingState.type || "" : incomingState.sessionType || "");
+    setSelectedDoctor(incomingState.selectedDoctor || null);
+    setSelectedSlot(initialSelectedSlot);
+    setSearch(incomingState.search || "");
+    setNextAppointmentNo(
+      isReturningFromPayment ? incomingState.reservedAppointmentNo || null : null
+    );
+  }, [
+    incomingState.search,
+    incomingState.selectedDoctor,
+    incomingState.sessionType,
+    incomingState.type,
+    initialSelectedSlot,
+    isReturningFromPayment,
+  ]);
+
+  useEffect(() => {
+    if (!isReturningFromPayment) {
+      clearStoredAppointmentPaymentData();
+    }
+  }, [isReturningFromPayment]);
 
   useEffect(() => {
     let isActive = true;
     if (isChatConsultation) {
       setNextAppointmentNo(null);
+      previewRequestKeyRef.current = "";
       return () => {
         isActive = false;
       };
     }
-    const nextNumberDate = isChatConsultation
-      ? buildInstantChatSchedule().date
-      : selectedSlot.date;
 
-    if (selectedDoctor?._id && nextNumberDate) {
+    if (isReturningFromPayment && incomingState.reservedAppointmentNo) {
+      setNextAppointmentNo(incomingState.reservedAppointmentNo);
+      previewRequestKeyRef.current = "";
+      return () => {
+        isActive = false;
+      };
+    }
+
+    if (selectedDoctorId && previewDate && selectedTime) {
+      const requestKey = `${selectedDoctorId}|${previewDate}|${selectedTime}|${sessionType}`;
+      if (previewRequestKeyRef.current === requestKey && nextAppointmentNo) {
+        return () => {
+          isActive = false;
+        };
+      }
+
+      previewRequestKeyRef.current = requestKey;
       setNextAppointmentNo(null);
 
       appointmentService
-        .getNextAppointmentNumber(selectedDoctor._id, nextNumberDate)
+        .getNextAppointmentNumber(
+          selectedDoctorId,
+          previewDate,
+          sessionType,
+          selectedTime
+        )
         .then((res) => {
-          if (isActive && res.success) setNextAppointmentNo(res.appointmentNo);
+          if (isActive && res.success && previewRequestKeyRef.current === requestKey) {
+            setNextAppointmentNo(res.appointmentNo);
+          }
         })
         .catch((err) => console.error("Failed to fetch appointment no:", err));
     } else {
       setNextAppointmentNo(null);
+      previewRequestKeyRef.current = "";
     }
 
     return () => {
       isActive = false;
     };
-  }, [isChatConsultation, selectedDoctor, selectedSlot.date]);
+  }, [
+    incomingState.reservedAppointmentNo,
+    isChatConsultation,
+    isReturningFromPayment,
+    nextAppointmentNo,
+    previewDate,
+    selectedDoctorId,
+    selectedTime,
+    sessionType,
+  ]);
 
   useEffect(() => {
     const fetchDoctors = async () => {
@@ -286,8 +365,12 @@ function TelemedicineFull() {
           day: bookingSchedule.day,
           time: bookingSchedule.time,
           type: sessionType,
+          reservedAppointmentNo:
+            nextAppointmentNo || (isReturningFromPayment ? incomingState.reservedAppointmentNo || "" : ""),
+          hasReservedSession: false,
           source: "telemedicine",
           returnPath: "/telemedicine",
+          fromPaymentReturn: false,
           isInstantChat: isChatConsultation,
         };
 
@@ -307,6 +390,14 @@ function TelemedicineFull() {
           throw new Error("Stripe checkout URL was not returned.");
         }
 
+        const nextPaymentState = {
+          ...paymentState,
+          reservedAppointmentNo:
+            response.reservedAppointmentNo || paymentState.reservedAppointmentNo || "",
+        };
+
+        setNextAppointmentNo(nextPaymentState.reservedAppointmentNo || null);
+        setStoredAppointmentPaymentData(nextPaymentState);
         window.location.href = response.checkoutUrl;
         return;
       }
@@ -512,7 +603,7 @@ function TelemedicineFull() {
                           }`}
                           onClick={() => handleSelectSlot(slot.day, time)}
                         >
-                          {time}
+                          {formatDisplayTime(time)}
                         </button>
                       ))}
                     </div>
@@ -627,7 +718,7 @@ function TelemedicineFull() {
                     {isChatConsultation
                       ? "Starts after doctor approval"
                       : selectedSlot.day && selectedSlot.time
-                        ? `${selectedSlot.day} - ${selectedSlot.time}`
+                        ? `${selectedSlot.day} - ${formatDisplayTime(selectedSlot.time)}`
                         : "Not selected"}
                   </strong>
                 </div>

@@ -11,7 +11,7 @@ import {
   getDoctorAppointments,
   getNextAppointmentNumberForDoctor,
 } from "../controllers/appointmentController.js";
-import { requireSignIn } from "../middlewares/authMiddleware.js";
+import { attachUserIfPresent, requireSignIn } from "../middlewares/authMiddleware.js";
 
 const router = express.Router();
 
@@ -24,6 +24,6 @@ router.delete("/delete/:id", requireSignIn, deleteAppointment);
 router.get("/user/all", requireSignIn, getUserAppointments);
 router.get("/user/details/:id", requireSignIn, getUserAppointmentDetails);
 router.get("/doctor/all", requireSignIn, getDoctorAppointments);
-router.get("/next-number/:doctorId", getNextAppointmentNumberForDoctor);
+router.get("/next-number/:doctorId", attachUserIfPresent, getNextAppointmentNumberForDoctor);
 
 export default router;

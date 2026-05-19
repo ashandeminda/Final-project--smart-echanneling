@@ -9,7 +9,7 @@ function Home() {
   return (
     <div className="min-h-screen bg-gray-50 font-sans">
       {/* HERO SECTION */}
-      <section className="relative overflow-hidden bg-gradient-to-br from-slate-900 via-blue-900 to-indigo-900 text-white py-20 lg:py-32 px-6 sm:px-12 lg:px-24 flex flex-col lg:flex-row items-center justify-between min-h-[80vh]">
+      <section className="relative overflow-hidden bg-linear-to-br from-slate-900 via-blue-900 to-indigo-900 text-white py-20 lg:py-32 px-6 sm:px-12 lg:px-24 flex flex-col lg:flex-row items-center justify-between min-h-[80vh]">
         {/* Background decorative blobs */}
         <div className="absolute top-0 left-1/4 w-96 h-96 bg-blue-500/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-pulse"></div>
         <div className="absolute top-0 right-1/4 w-96 h-96 bg-indigo-500/20 rounded-full mix-blend-multiply filter blur-3xl opacity-70 animate-pulse" style={{ animationDelay: '2s' }}></div>

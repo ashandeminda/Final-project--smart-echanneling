@@ -5,6 +5,16 @@ import { sendApprovalEmails } from "../services/emailService.js";
 
 const TELEMEDICINE_TYPES = ["Video Consultation", "Chat Consultation"];
 const APPOINTMENT_RESERVATION_WINDOW_MS = 30 * 60 * 1000;
+const VIDEO_NUMBERING_TYPES = ["Video Consultation", "Telemedicine"];
+const MAX_APPOINTMENTS_PER_SLOT = 3;
+
+const getAppointmentNumberingTypes = (type) => {
+  if (VIDEO_NUMBERING_TYPES.includes(type)) {
+    return VIDEO_NUMBERING_TYPES;
+  }
+
+  return ["In-Person"];
+};
 
 const formatDatePart = (value) => String(value).padStart(2, "0");
 
@@ -21,42 +31,71 @@ const buildInstantChatSchedule = () => {
   };
 };
 
-const getNextAppointmentNo = async (doctorId, date) => {
-  const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+const getAppointmentNumberValue = (appointmentNo) => {
+  const parsed = Number.parseInt(appointmentNo, 10);
+  return Number.isInteger(parsed) ? parsed : Number.MAX_SAFE_INTEGER;
+};
+
+const compareAppointments = (left, right) => {
+  const dateCompare = String(left?.date || "").localeCompare(String(right?.date || ""));
+  if (dateCompare !== 0) return dateCompare;
+
+  const typeCompare = String(left?.type || "").localeCompare(String(right?.type || ""));
+  if (typeCompare !== 0) return typeCompare;
+
+  const appointmentNoCompare =
+    getAppointmentNumberValue(left?.appointmentNo) - getAppointmentNumberValue(right?.appointmentNo);
+  if (appointmentNoCompare !== 0) return appointmentNoCompare;
+
+  const timeCompare = String(left?.time || "").localeCompare(String(right?.time || ""));
+  if (timeCompare !== 0) return timeCompare;
+
+  return String(left?._id || "").localeCompare(String(right?._id || ""));
+};
+
+const sortAppointments = (appointments = []) => [...appointments].sort(compareAppointments);
+
+const getActiveSlotAppointmentCount = async (doctorId, date, time, type = "In-Person") => {
+  const numberingTypes = getAppointmentNumberingTypes(type);
+
+  const appointmentQuery = {
+    status: { $in: ["pending", "approved"] },
+    type: { $in: numberingTypes },
+  };
+  if (doctorId) appointmentQuery.doctorId = doctorId;
+  if (date) appointmentQuery.date = date;
+  if (time) appointmentQuery.time = time;
+
+  return appointmentModel.countDocuments(appointmentQuery);
+};
+
+const getNextAppointmentNo = async (doctorId, date, time, type = "In-Person") => {
+  const numberingTypes = getAppointmentNumberingTypes(type);
 
   const appointmentQuery = {
     appointmentNo: { $regex: "^[0-9]+$" },
     status: { $in: ["pending", "approved"] },
+    type: { $in: numberingTypes },
   };
   if (doctorId) appointmentQuery.doctorId = doctorId;
   if (date) appointmentQuery.date = date;
+  if (time) appointmentQuery.time = time;
 
-  const sessionQuery = {
-    type: "appointment",
-    reservedAppointmentNo: { $regex: "^[0-9]+$" },
-    status: { $in: ["initiated", "pending"] },
-    relatedAppointmentId: { $exists: false },
-    createdAt: { $gte: activeReservationCutoff },
-  };
-  if (doctorId) sessionQuery["payload.doctorId"] = doctorId;
-  if (date) sessionQuery["payload.date"] = date;
+  const appointments = await appointmentModel.find(appointmentQuery, { appointmentNo: 1, _id: 0 });
 
-  const [appointments, reservedSessions] = await Promise.all([
-    appointmentModel.find(appointmentQuery, { appointmentNo: 1, _id: 0 }),
-    paymentSessionModel.find(sessionQuery, { reservedAppointmentNo: 1, _id: 0 }),
-  ]);
-
-  const numbers = [
-    ...appointments.map((a) => Number.parseInt(a.appointmentNo, 10)),
-    ...reservedSessions.map((session) =>
-      Number.parseInt(session.reservedAppointmentNo, 10)
-    ),
-  ]
+  const numbers = appointments
+    .map((a) => Number.parseInt(a.appointmentNo, 10))
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 100);
 
-  const nextNumber = numbers.length ? Math.max(...numbers) + 1 : 1;
+  const occupiedNumbers = new Set(numbers);
 
-  return nextNumber <= 100 ? String(nextNumber) : null;
+  for (let candidate = 1; candidate <= 100; candidate += 1) {
+    if (!occupiedNumbers.has(candidate)) {
+      return String(candidate);
+    }
+  }
+
+  return null;
 };
 
 // ================= CREATE APPOINTMENT =================
@@ -79,17 +118,11 @@ export const createAppointment = async (req, res) => {
       });
     }
 
-    const existingAppointment = await appointmentModel.findOne({
-      doctorId,
-      date,
-      time,
-      status: { $in: ["pending", "approved"] },
-    });
-
-    if (existingAppointment) {
+    const activeSlotCount = await getActiveSlotAppointmentCount(doctorId, date, time, type);
+    if (activeSlotCount >= MAX_APPOINTMENTS_PER_SLOT) {
       return res.status(409).json({
         success: false,
-        message: "This slot is already booked for the selected doctor",
+        message: "This slot is full for the selected doctor",
       });
     }
 
@@ -110,7 +143,7 @@ export const createAppointment = async (req, res) => {
     }
 
     for (let attempt = 0; attempt < 5; attempt += 1) {
-      const appointmentNo = await getNextAppointmentNo(doctorId, date);
+      const appointmentNo = await getNextAppointmentNo(doctorId, date, time, type);
       if (!appointmentNo) {
         return res
           .status(400)
@@ -142,7 +175,7 @@ export const createAppointment = async (req, res) => {
         ) {
           return res.status(409).json({
             success: false,
-            message: "This slot is already booked for the selected doctor",
+            message: "This slot is full for the selected doctor",
           });
         }
 
@@ -167,7 +200,7 @@ export const getAllAppointments = async (req, res) => {
       .populate("userId", "name email")
       .populate("doctorId", "name specialization");
 
-    res.json({ success: true, appointments });
+    res.json({ success: true, appointments: sortAppointments(appointments) });
   } catch (error) {
     res.status(500).json({ message: "Fetch Error" });
   }
@@ -289,7 +322,7 @@ export const updateAppointmentStatus = async (req, res) => {
     ) {
       return res.status(409).json({
         success: false,
-        message: "Cannot set this status because the slot is already booked",
+        message: "Cannot set this status because the slot is full",
       });
     }
 
@@ -363,7 +396,7 @@ export const getUserAppointments = async (req, res) => {
       .find({ userId: req.user.id })
       .populate("doctorId", "name specialization");
 
-    res.json({ success: true, appointments });
+    res.json({ success: true, appointments: sortAppointments(appointments) });
   } catch (error) {
     res.status(500).json({ message: "User Fetch Error" });
   }
@@ -406,7 +439,7 @@ export const getDoctorAppointments = async (req, res) => {
       .populate("userId", "name email phone")
       .sort({ date: 1, time: 1 });
 
-    res.json({ success: true, appointments, doctor });
+    res.json({ success: true, appointments: sortAppointments(appointments), doctor });
   } catch (error) {
     res.status(500).json({ message: "Doctor Fetch Error" });
   }
@@ -415,8 +448,46 @@ export const getDoctorAppointments = async (req, res) => {
 export const getNextAppointmentNumberForDoctor = async (req, res) => {
   try {
     const { doctorId } = req.params;
-    const { date } = req.query;
-    const appointmentNo = await getNextAppointmentNo(doctorId, date);
+    const { date, time, type } = req.query;
+
+    if (req.user?.id && doctorId && date && time && type !== "Chat Consultation") {
+      const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+      const reusableSession = await paymentSessionModel.findOne(
+        {
+          type: "appointment",
+          userId: req.user.id,
+          status: { $in: ["initiated", "pending"] },
+          relatedAppointmentId: { $exists: false },
+          createdAt: { $gte: activeReservationCutoff },
+          "payload.doctorId": doctorId,
+          "payload.date": date,
+          "payload.time": time,
+          "payload.type": type || "In-Person",
+          reservedAppointmentNo: { $regex: "^[0-9]+$" },
+        },
+        { reservedAppointmentNo: 1, _id: 0 }
+      ).sort({ createdAt: -1 });
+
+      if (reusableSession?.reservedAppointmentNo) {
+        return res.json({
+          success: true,
+          appointmentNo: reusableSession.reservedAppointmentNo,
+          reused: true,
+        });
+      }
+    }
+
+    const activeSlotCount = await getActiveSlotAppointmentCount(
+      doctorId,
+      date,
+      time,
+      type || "In-Person"
+    );
+    if (activeSlotCount >= MAX_APPOINTMENTS_PER_SLOT) {
+      return res.status(409).json({ message: "This slot is full for the selected doctor" });
+    }
+
+    const appointmentNo = await getNextAppointmentNo(doctorId, date, time, type || "In-Person");
     if (!appointmentNo) {
       return res.status(400).json({ message: "Appointment numbers are full (1-100)" });
     }

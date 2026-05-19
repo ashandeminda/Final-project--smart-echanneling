@@ -3,10 +3,11 @@ import { useLocation, useNavigate } from "react-router-dom";
 import { useAuth } from "../context/useAuth";
 import doctorImg from "../assets/doctor.jpg";
 import {
-  getStoredBookingPageState,
+  clearStoredAppointmentPaymentData,
+  getStoredAppointmentPaymentData,
   setStoredAppointmentPaymentData,
-  setStoredBookingPageState,
 } from "../utils/paymentBookingStorage";
+import { formatDisplayTime } from "../utils/timeFormat";
 
 const weeklyAvailability = [
   { day: "Monday", times: ["09:00", "10:00", "11:00", "14:00"] },
@@ -42,11 +43,30 @@ function Booking() {
   const navigate = useNavigate();
   const location = useLocation();
   const { isAuthenticated } = useAuth();
+  const storedPaymentData = useMemo(() => getStoredAppointmentPaymentData(), []);
+  const incomingState = useMemo(() => {
+    if (location.state && Object.keys(location.state).length > 0) {
+      return location.state;
+    }
 
-  const storedBookingState = useMemo(() => getStoredBookingPageState(), []);
+    if (
+      storedPaymentData?.returnPath === "/booking" &&
+      storedPaymentData?.source === "booking" &&
+      storedPaymentData?.fromPaymentReturn
+    ) {
+      return storedPaymentData;
+    }
+
+    return {};
+  }, [location.state, storedPaymentData]);
+  const isReturningFromPayment =
+    incomingState.source === "booking" &&
+    incomingState.returnPath === "/booking" &&
+    Boolean(incomingState.fromPaymentReturn);
+
   const doctorData = useMemo(
     () =>
-      location.state || storedBookingState.doctorData || {
+      incomingState || {
         doctorId: null,
         doctor: "Dr. Michel",
         specialty: "cardiologist",
@@ -56,20 +76,34 @@ function Booking() {
         image: "",
         rating: "4.8",
       },
-    [location.state, storedBookingState.doctorData]
+    [incomingState]
   );
 
-  const [form, setForm] = useState(() => ({
-    day: storedBookingState.form?.day || "",
-    date: storedBookingState.form?.date || "",
-    time: storedBookingState.form?.time || "",
-  }));
+  const initialFormState = useMemo(
+    () =>
+      isReturningFromPayment
+        ? {
+            day: incomingState.day || "",
+            date: incomingState.date || "",
+            time: incomingState.time || "",
+          }
+        : { day: "", date: "", time: "" },
+    [incomingState.date, incomingState.day, incomingState.time, isReturningFromPayment]
+  );
+
+  const [form, setForm] = useState(initialFormState);
   const telemedicineAvailable =
     Boolean(doctorData.videoConsultationEnabled) || Boolean(doctorData.chatConsultationEnabled);
 
   useEffect(() => {
-    setStoredBookingPageState({ doctorData, form });
-  }, [doctorData, form]);
+    setForm(initialFormState);
+  }, [initialFormState]);
+
+  useEffect(() => {
+    if (!isReturningFromPayment) {
+      clearStoredAppointmentPaymentData();
+    }
+  }, [isReturningFromPayment]);
 
   const handleTimeSelect = (day, time) => {
     setForm({
@@ -111,8 +145,11 @@ function Booking() {
       day: form.day,
       time: form.time,
       type: "In-Person",
+      reservedAppointmentNo: isReturningFromPayment ? incomingState.reservedAppointmentNo || "" : "",
+      hasReservedSession: false,
       source: "booking",
       returnPath: "/booking",
+      fromPaymentReturn: false,
     };
 
     setStoredAppointmentPaymentData(paymentState);
@@ -265,7 +302,7 @@ function Booking() {
                             }`}
                             onClick={() => handleTimeSelect(slot.day, time)}
                           >
-                            {time}
+                            {formatDisplayTime(time)}
                           </button>
                         );
                       })}
@@ -296,7 +333,7 @@ function Booking() {
               <div className="text-center p-4 bg-slate-50 rounded-xl border border-slate-100">
                 <p className={`text-sm font-medium ${form.day && form.time ? 'text-teal-700' : 'text-slate-500'}`}>
                   {form.day && form.time
-                    ? `Selected: ${form.day} at ${form.time}`
+                    ? `Selected: ${form.day} at ${formatDisplayTime(form.time)}`
                     : "Select your preferred date and time to continue"}
                 </p>
               </div>

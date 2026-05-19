@@ -3,6 +3,7 @@ import { useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import appointmentService from "../api/appointmentService";
 import paymentService from "../api/paymentService";
 import { useAuth } from "../context/useAuth";
+import { formatDisplayTime } from "../utils/timeFormat";
 import {
   clearStoredAppointmentPaymentData,
   clearStoredBookingPageState,
@@ -65,6 +66,10 @@ function AppointmentPayment() {
   const [successData, setSuccessData] = useState(null);
   const [appointmentNumber, setAppointmentNumber] = useState(null);
   const isInstantChat = bookingData.type === "Chat Consultation" && bookingData.isInstantChat;
+  const shouldUseReservedAppointmentNo =
+    Boolean(bookingData.hasReservedSession) ||
+    Boolean(bookingData.fromPaymentReturn) ||
+    isCancelled;
 
   useEffect(() => {
     if (location.state && Object.keys(location.state).length > 0) {
@@ -115,11 +120,23 @@ function AppointmentPayment() {
       };
     }
 
+    if (shouldUseReservedAppointmentNo && bookingData.reservedAppointmentNo) {
+      setAppointmentNumber(bookingData.reservedAppointmentNo);
+      return () => {
+        isActive = false;
+      };
+    }
+
     if (bookingData.doctorId && bookingData.date) {
       setAppointmentNumber(null);
 
       appointmentService
-        .getNextAppointmentNumber(bookingData.doctorId, bookingData.date)
+        .getNextAppointmentNumber(
+          bookingData.doctorId,
+          bookingData.date,
+          bookingData.type,
+          bookingData.time
+        )
         .then((res) => {
           if (isActive && res.success) {
             setAppointmentNumber(res.appointmentNo);
@@ -133,7 +150,17 @@ function AppointmentPayment() {
     return () => {
       isActive = false;
     };
-  }, [bookingData.date, bookingData.doctorId, isInstantChat, stripeSessionId]);
+  }, [
+    bookingData.date,
+    bookingData.doctorId,
+    bookingData.reservedAppointmentNo,
+    bookingData.time,
+    bookingData.type,
+    isCancelled,
+    isInstantChat,
+    shouldUseReservedAppointmentNo,
+    stripeSessionId,
+  ]);
 
   useEffect(() => {
     if (successData) {
@@ -144,12 +171,19 @@ function AppointmentPayment() {
   }, [successData]);
 
   const handleBackToFlow = () => {
+    const returnState = {
+      ...bookingData,
+      fromPaymentReturn: true,
+    };
+
+    setStoredAppointmentPaymentData(returnState);
+
     if (bookingData.returnPath === "/telemedicine") {
-      navigate("/telemedicine");
+      navigate("/telemedicine", { state: returnState });
       return;
     }
 
-    navigate("/booking", { state: bookingData });
+    navigate("/booking", { state: returnState });
   };
 
   const handlePayment = async () => {
@@ -183,7 +217,15 @@ function AppointmentPayment() {
         throw new Error("Stripe checkout URL was not returned.");
       }
 
-      setStoredAppointmentPaymentData(bookingData);
+      const nextBookingData = {
+        ...bookingData,
+        reservedAppointmentNo: response.reservedAppointmentNo || bookingData.reservedAppointmentNo || "",
+        hasReservedSession: true,
+        fromPaymentReturn: false,
+      };
+
+      setAppointmentNumber(nextBookingData.reservedAppointmentNo || null);
+      setStoredAppointmentPaymentData(nextBookingData);
       window.location.href = response.checkoutUrl;
     } catch (err) {
       console.error("Payment initialization failed:", err);
@@ -272,7 +314,7 @@ function AppointmentPayment() {
               <div className="rounded-2xl bg-white border border-slate-200 p-4">
                 <p className="text-slate-400 text-xs font-bold uppercase tracking-wider mb-1">Time</p>
                 <strong className="text-slate-900 text-lg">
-                  {appointmentType === "Chat Consultation" ? "Instant chat" : appointmentTime || "-"}
+                  {appointmentType === "Chat Consultation" ? "Instant chat" : formatDisplayTime(appointmentTime)}
                 </strong>
               </div>
 
@@ -369,7 +411,7 @@ function AppointmentPayment() {
                 <strong className="text-slate-900 text-base">
                   {isInstantChat
                     ? "Instant chat after doctor approval"
-                    : `${bookingData.day || "-"}${bookingData.time ? ` - ${bookingData.time}` : ""}`}
+                    : `${bookingData.day || "-"}${bookingData.time ? ` - ${formatDisplayTime(bookingData.time)}` : ""}`}
                 </strong>
               </div>
 

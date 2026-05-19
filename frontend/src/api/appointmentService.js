@@ -55,9 +55,13 @@ const appointmentService = {
     return response.data;
   },
 
-  getNextAppointmentNumber: async (doctorId, date) => {
+  getNextAppointmentNumber: async (doctorId, date, type, time) => {
     const response = await api.get(`/appointment/next-number/${doctorId}`, {
-      params: date ? { date } : {},
+      params: {
+        ...(date ? { date } : {}),
+        ...(type ? { type } : {}),
+        ...(time ? { time } : {}),
+      },
     });
     return response.data;
   },

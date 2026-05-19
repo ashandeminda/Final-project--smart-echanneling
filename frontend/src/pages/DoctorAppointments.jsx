@@ -4,6 +4,7 @@ import appointmentService from "../api/appointmentService";
 import doctorService from "../api/doctorService";
 import healthRecordService from "../api/healthRecordService";
 import { useAuth } from "../context/useAuth";
+import { formatDisplayTime } from "../utils/timeFormat";
 
 const DAYS = [
   "Monday",
@@ -62,6 +63,9 @@ const normalizeDoctorProfile = (doctor) => {
   };
 };
 
+const isTelemedicineAppointment = (appointment) =>
+  appointment?.type === "Video Consultation" || appointment?.type === "Chat Consultation";
+
 function DoctorAppointments() {
   const navigate = useNavigate();
   const { isAuthenticated, user } = useAuth();
@@ -85,7 +89,7 @@ function DoctorAppointments() {
       return "Instant chat";
     }
 
-    return appointment.time || "-";
+    return formatDisplayTime(appointment.time);
   };
 
   const getReferenceText = (appointment) => {
@@ -136,6 +140,10 @@ function DoctorAppointments() {
   }, [isAuthenticated, navigate, user]);
 
   const filtered = appointments.filter((app) => app.status === tab);
+  const filteredPhysicalAppointments = filtered.filter(
+    (app) => !isTelemedicineAppointment(app)
+  );
+  const filteredTelemedicineAppointments = filtered.filter(isTelemedicineAppointment);
   const approvedCount = appointments.filter((app) => app.status === "approved").length;
   const pendingCount = appointments.filter((app) => app.status === "pending").length;
   const rejectedCount = appointments.filter((app) => app.status === "rejected").length;
@@ -292,6 +300,88 @@ function DoctorAppointments() {
       <span className={`inline-block px-3 py-1 rounded-full text-xs font-bold capitalize ${colorClass}`}>
         {status}
       </span>
+    );
+  };
+
+  const renderAppointmentCard = (app) => {
+    const appointmentStart =
+      app.type === "Chat Consultation" ? null : getAppointmentStart(app.date, app.time);
+    const canJoin = !appointmentStart || currentTime >= appointmentStart;
+
+    return (
+      <div key={app._id} className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 flex flex-col lg:flex-row justify-between gap-6 shadow-sm hover:shadow-md transition-shadow">
+        <div className="flex-1">
+          <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
+            <div>
+              <p className="mb-1 text-blue-600 text-xs font-bold tracking-widest uppercase">Patient</p>
+              <h3 className="text-xl sm:text-2xl font-bold text-slate-900">{app.userId?.name || "Patient"}</h3>
+            </div>
+            <span className={`px-4 py-1.5 text-xs font-bold rounded-full uppercase tracking-wider border ${
+              isTelemedicineAppointment(app)
+                ? "bg-blue-50 text-blue-700 border-blue-100"
+                : "bg-emerald-50 text-emerald-700 border-emerald-100"
+            }`}>
+              {app.type || "In-Person"}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+            {[
+              { l: "Email", v: app.userId?.email || "No email" },
+              { l: "Phone", v: app.userId?.phone || "No phone" },
+              { l: "Date", v: app.date },
+              { l: "Time", v: getSessionAvailabilityText(app) },
+              { l: app.type === "Chat Consultation" ? "Session" : "Ref #", v: getReferenceText(app) },
+              { l: "Type", v: app.type || "In-Person" }
+            ].map((dt, i) => (
+              <div key={i} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl">
+                <span className="block text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">{dt.l}</span>
+                <strong className="text-slate-900 text-sm">{dt.v}</strong>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-start gap-3 mt-4 lg:mt-0 lg:pl-6 lg:border-l lg:border-slate-100 lg:min-w-[160px]">
+          <StatusBadge status={app.status} />
+
+          <button
+            className="w-full px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-bold rounded-xl transition-colors min-w-[120px]"
+            onClick={() => handleViewHealthRecords(app)}
+          >
+            Health Records
+          </button>
+
+          {tab === "pending" && (app.type === "Video Consultation" || app.type === "Chat Consultation") && (
+            <div className="flex lg:flex-col gap-2 w-full mt-auto">
+              <button className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors min-w-[120px]" onClick={() => handleAppointmentStatus(app._id, "approved")} disabled={loading}>
+                Approve
+              </button>
+              <button className="flex-1 px-4 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 text-sm font-bold rounded-xl transition-colors min-w-[120px]" onClick={() => handleAppointmentStatus(app._id, "rejected")} disabled={loading}>
+                Reject
+              </button>
+            </div>
+          )}
+
+          {tab === "approved" && (app.type === "Video Consultation" || app.type === "Chat Consultation") && (
+            <div className="flex flex-col gap-2 w-full mt-auto">
+              <button
+                className="w-full px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white shadow-md text-sm font-bold rounded-xl disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none transition-all shadow-blue-600/20"
+                onClick={() => handleJoin(app)}
+                disabled={!canJoin}
+                title={!canJoin ? `Available at ${formatDisplayTime(app.time)} on ${app.date}` : ""}
+              >
+                {app.type === "Video Consultation"
+                  ? app.meetingProvider === "teams"
+                    ? "Open Teams"
+                    : "Join Video"
+                  : "Join Chat"}
+              </button>
+              {!canJoin && <p className="text-xs text-slate-500 font-medium text-center">Available at booked time</p>}
+            </div>
+          )}
+        </div>
+      </div>
     );
   };
 
@@ -501,83 +591,47 @@ function DoctorAppointments() {
              </div>
           )}
 
-          <div className="space-y-4">
-            {!loading && filtered.map((app) => {
-              const appointmentStart =
-                app.type === "Chat Consultation" ? null : getAppointmentStart(app.date, app.time);
-              const canJoin = !appointmentStart || currentTime >= appointmentStart;
+          {!loading && filtered.length > 0 && (
+            <div className="space-y-8">
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Physical Appointments</h3>
+                    <p className="text-sm text-slate-500">In-person hospital visits.</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                    {filteredPhysicalAppointments.length} Total
+                  </span>
+                </div>
+                {filteredPhysicalAppointments.length ? (
+                  filteredPhysicalAppointments.map(renderAppointmentCard)
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center text-slate-500 shadow-sm">
+                    No physical appointments in this tab.
+                  </div>
+                )}
+              </div>
 
-              return (
-                 <div key={app._id} className="bg-white border border-slate-200 rounded-3xl p-6 md:p-8 flex flex-col lg:flex-row justify-between gap-6 shadow-sm hover:shadow-md transition-shadow">
-                   <div className="flex-1">
-                     <div className="flex flex-wrap justify-between items-start gap-4 mb-6">
-                       <div>
-                         <p className="mb-1 text-blue-600 text-xs font-bold tracking-widest uppercase">Patient</p>
-                         <h3 className="text-xl sm:text-2xl font-bold text-slate-900">{app.userId?.name || "Patient"}</h3>
-                       </div>
-                       <span className="px-4 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded-full uppercase tracking-wider border border-indigo-100">{app.type || "In-Person"}</span>
-                     </div>
-
-                     <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-                       {[
-                         { l: "Email", v: app.userId?.email || "No email" },
-                         { l: "Phone", v: app.userId?.phone || "No phone" },
-                         { l: "Date", v: app.date },
-                         { l: "Time", v: getSessionAvailabilityText(app) },
-                         { l: app.type === "Chat Consultation" ? "Session" : "Ref #", v: getReferenceText(app) },
-                         { l: "Type", v: app.type || "In-Person" }
-                       ].map((dt, i) => (
-                          <div key={i} className="bg-slate-50 border border-slate-100 p-3 rounded-2xl">
-                             <span className="block text-slate-500 text-[10px] sm:text-xs font-bold uppercase tracking-wider mb-1">{dt.l}</span>
-                             <strong className="text-slate-900 text-sm">{dt.v}</strong>
-                          </div>
-                       ))}
-                     </div>
-                   </div>
-
-                   <div className="flex flex-row lg:flex-col items-center lg:items-end justify-between lg:justify-start gap-3 mt-4 lg:mt-0 lg:pl-6 lg:border-l lg:border-slate-100 lg:min-w-[160px]">
-                     <StatusBadge status={app.status} />
-
-                     <button
-                       className="w-full px-4 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 text-sm font-bold rounded-xl transition-colors min-w-[120px]"
-                       onClick={() => handleViewHealthRecords(app)}
-                     >
-                       Health Records
-                     </button>
-
-                     {tab === "pending" && (app.type === "Video Consultation" || app.type === "Chat Consultation") && (
-                       <div className="flex lg:flex-col gap-2 w-full mt-auto">
-                         <button className="flex-1 px-4 py-2.5 bg-slate-900 hover:bg-slate-800 text-white text-sm font-bold rounded-xl transition-colors min-w-[120px]" onClick={() => handleAppointmentStatus(app._id, "approved")} disabled={loading}>
-                           Approve
-                         </button>
-                         <button className="flex-1 px-4 py-2.5 bg-white border border-red-200 text-red-600 hover:bg-red-50 text-sm font-bold rounded-xl transition-colors min-w-[120px]" onClick={() => handleAppointmentStatus(app._id, "rejected")} disabled={loading}>
-                           Reject
-                         </button>
-                       </div>
-                     )}
-
-                     {tab === "approved" && (app.type === "Video Consultation" || app.type === "Chat Consultation") && (
-                       <div className="flex flex-col gap-2 w-full mt-auto">
-                         <button 
-                           className="w-full px-5 py-3 bg-blue-600 hover:bg-blue-700 text-white shadow-md text-sm font-bold rounded-xl disabled:opacity-50 disabled:bg-slate-300 disabled:shadow-none transition-all shadow-blue-600/20" 
-                           onClick={() => handleJoin(app)} 
-                           disabled={!canJoin}
-                           title={!canJoin ? `Available at ${app.time} on ${app.date}` : ""}
-                         >
-                           {app.type === "Video Consultation"
-                             ? app.meetingProvider === "teams"
-                               ? "Open Teams"
-                               : "Join Video"
-                             : "Join Chat"}
-                         </button>
-                         {!canJoin && <p className="text-xs text-slate-500 font-medium text-center">Available at booked time</p>}
-                       </div>
-                     )}
-                   </div>
-                 </div>
-              );
-            })}
-          </div>
+              <div className="space-y-4">
+                <div className="flex items-center justify-between gap-4">
+                  <div>
+                    <h3 className="text-xl font-bold text-slate-900">Telemedicine Appointments</h3>
+                    <p className="text-sm text-slate-500">Video and chat consultation requests.</p>
+                  </div>
+                  <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                    {filteredTelemedicineAppointments.length} Total
+                  </span>
+                </div>
+                {filteredTelemedicineAppointments.length ? (
+                  filteredTelemedicineAppointments.map(renderAppointmentCard)
+                ) : (
+                  <div className="bg-white border border-slate-200 rounded-3xl p-8 text-center text-slate-500 shadow-sm">
+                    No telemedicine appointments in this tab.
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
         </div>
 
         {recordsPanel.open && (

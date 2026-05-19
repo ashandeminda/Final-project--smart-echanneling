@@ -4,10 +4,23 @@ import doctorModel from "../models/doctorModel.js";
 import donationModel from "../models/donationModel.js";
 import paymentSessionModel from "../models/paymentSessionModel.js";
 import userModel from "../models/userModel.js";
-import { sendPaymentSuccessEmails } from "../services/emailService.js";
+import {
+  sendDonationSuccessEmail,
+  sendPaymentSuccessEmails,
+} from "../services/emailService.js";
 
 const getEnv = (key, fallback = "") => process.env[key] || fallback;
 const APPOINTMENT_RESERVATION_WINDOW_MS = 30 * 60 * 1000;
+const VIDEO_NUMBERING_TYPES = ["Video Consultation", "Telemedicine"];
+const MAX_APPOINTMENTS_PER_SLOT = 3;
+
+const getAppointmentNumberingTypes = (type) => {
+  if (VIDEO_NUMBERING_TYPES.includes(type)) {
+    return VIDEO_NUMBERING_TYPES;
+  }
+
+  return ["In-Person"];
+};
 
 const generateOrderId = (prefix) =>
   `${prefix}-${Date.now()}-${Math.floor(Math.random() * 100000)}`;
@@ -39,44 +52,72 @@ const buildInstantChatSchedule = () => {
   };
 };
 
-const getNextAppointmentNo = async (doctorId, date) => {
-  const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+const getActiveSlotAppointmentCount = async (doctorId, date, time, type = "In-Person") => {
+  const numberingTypes = getAppointmentNumberingTypes(type);
 
-  const [appointments, reservedSessions] = await Promise.all([
-    appointmentModel.find(
-      {
-        appointmentNo: { $regex: "^[0-9]+$" },
-        doctorId,
-        date,
-        status: { $in: ["pending", "approved"] },
-      },
-      { appointmentNo: 1, _id: 0 }
-    ),
-    paymentSessionModel.find(
-      {
-        type: "appointment",
-        "payload.doctorId": doctorId,
-        "payload.date": date,
-        reservedAppointmentNo: { $regex: "^[0-9]+$" },
-        status: { $in: ["initiated", "pending"] },
-        relatedAppointmentId: { $exists: false },
-        createdAt: { $gte: activeReservationCutoff },
-      },
-      { reservedAppointmentNo: 1, _id: 0 }
-    ),
-  ]);
+  return appointmentModel.countDocuments(
+    {
+      doctorId,
+      date,
+      time,
+      type: { $in: numberingTypes },
+      status: { $in: ["pending", "approved"] },
+    }
+  );
+};
 
-  const numbers = [
-    ...appointments.map((a) => Number.parseInt(a.appointmentNo, 10)),
-    ...reservedSessions.map((session) =>
-      Number.parseInt(session.reservedAppointmentNo, 10)
-    ),
-  ]
+const getNextAppointmentNo = async (doctorId, date, time, type = "In-Person") => {
+  const numberingTypes = getAppointmentNumberingTypes(type);
+
+  const appointments = await appointmentModel.find(
+    {
+      appointmentNo: { $regex: "^[0-9]+$" },
+      doctorId,
+      date,
+      time,
+      type: { $in: numberingTypes },
+      status: { $in: ["pending", "approved"] },
+    },
+    { appointmentNo: 1, _id: 0 }
+  );
+
+  const numbers = appointments
+    .map((a) => Number.parseInt(a.appointmentNo, 10))
     .filter((n) => Number.isInteger(n) && n >= 1 && n <= 100);
 
-  const nextNumber = numbers.length ? Math.max(...numbers) + 1 : 1;
+  const occupiedNumbers = new Set(numbers);
 
-  return nextNumber <= 100 ? String(nextNumber) : null;
+  for (let candidate = 1; candidate <= 100; candidate += 1) {
+    if (!occupiedNumbers.has(candidate)) {
+      return String(candidate);
+    }
+  }
+
+  return null;
+};
+
+const findReusableAppointmentSession = async ({
+  userId,
+  doctorId,
+  date,
+  time,
+  type,
+}) => {
+  const activeReservationCutoff = new Date(Date.now() - APPOINTMENT_RESERVATION_WINDOW_MS);
+
+  return paymentSessionModel
+    .findOne({
+      type: "appointment",
+      userId,
+      status: { $in: ["initiated", "pending"] },
+      relatedAppointmentId: { $exists: false },
+      createdAt: { $gte: activeReservationCutoff },
+      "payload.doctorId": doctorId,
+      "payload.date": date,
+      "payload.time": time,
+      "payload.type": type || "In-Person",
+    })
+    .sort({ createdAt: -1 });
 };
 
 const createAppointmentFromSession = async (session) => {
@@ -87,15 +128,9 @@ const createAppointmentFromSession = async (session) => {
     throw new Error("Appointment session data is incomplete");
   }
 
-  const existingAppointment = await appointmentModel.findOne({
-    doctorId,
-    date,
-    time,
-    status: { $in: ["pending", "approved"] },
-  });
-
-  if (existingAppointment) {
-    throw new Error("This slot is already booked for the selected doctor");
+  const activeSlotCount = await getActiveSlotAppointmentCount(doctorId, date, time, type);
+  if (activeSlotCount >= MAX_APPOINTMENTS_PER_SLOT) {
+    throw new Error("This slot is full for the selected doctor");
   }
 
   if (isChatConsultation) {
@@ -114,7 +149,7 @@ const createAppointmentFromSession = async (session) => {
 
   for (let attempt = 0; attempt < 5; attempt += 1) {
     const appointmentNo =
-      session.reservedAppointmentNo || (await getNextAppointmentNo(doctorId, date));
+      session.reservedAppointmentNo || (await getNextAppointmentNo(doctorId, date, time, type));
     if (!appointmentNo) {
       throw new Error("Appointment numbers are full (1-100)");
     }
@@ -210,6 +245,30 @@ const sendAppointmentPaymentEmailsIfNeeded = async (session) => {
     patient,
     doctorUser
   );
+
+  session.paymentConfirmationEmailsSent = true;
+  await session.save();
+};
+
+const sendDonationPaymentEmailIfNeeded = async (session) => {
+  if (
+    session.type !== "donation" ||
+    !session.relatedDonationId ||
+    session.paymentConfirmationEmailsSent
+  ) {
+    return;
+  }
+
+  const donation = await donationModel.findById(session.relatedDonationId);
+
+  if (!donation || !session.customer?.email) {
+    return;
+  }
+
+  await sendDonationSuccessEmail(donation, {
+    name: session.payload?.name || donation.name || "Donor",
+    email: session.customer.email,
+  });
 
   session.paymentConfirmationEmailsSent = true;
   await session.save();
@@ -344,17 +403,62 @@ export const initiateAppointmentPayment = async (req, res) => {
       return res.status(400).json({ message: "Appointment payment details are missing" });
     }
 
-    const existingAppointment = await appointmentModel.findOne({
+    const activeSlotCount = await getActiveSlotAppointmentCount(doctorId, date, time, type);
+    if (activeSlotCount >= MAX_APPOINTMENTS_PER_SLOT) {
+      return res.status(409).json({
+        message: "This slot is full for the selected doctor",
+      });
+    }
+
+    const reusableSession = await findReusableAppointmentSession({
+      userId: req.user.id,
       doctorId,
       date,
       time,
-      status: { $in: ["pending", "approved"] },
+      type: type || "In-Person",
     });
 
-    if (existingAppointment) {
-      return res.status(409).json({
-        message: "This slot is already booked for the selected doctor",
-      });
+    if (reusableSession?.stripeSessionId) {
+      const stripe = getStripeClient();
+      const existingStripeSession = await stripe.checkout.sessions.retrieve(
+        reusableSession.stripeSessionId
+      );
+
+      reusableSession.stripePaymentIntentId =
+        typeof existingStripeSession.payment_intent === "string"
+          ? existingStripeSession.payment_intent
+          : reusableSession.stripePaymentIntentId;
+
+      if (existingStripeSession.payment_status === "paid") {
+        if (reusableSession.status !== "completed") {
+          await ensureCompletedRecord(reusableSession);
+        }
+        reusableSession.status = "completed";
+        await reusableSession.save();
+
+        return res.status(409).json({
+          message: "This appointment payment has already been completed",
+        });
+      }
+
+      if (existingStripeSession.status === "open" && existingStripeSession.url) {
+        reusableSession.status = "pending";
+        await reusableSession.save();
+
+        return res.json({
+          success: true,
+          orderId: reusableSession.orderId,
+          sessionId: existingStripeSession.id,
+          checkoutUrl: existingStripeSession.url,
+          reservedAppointmentNo: reusableSession.reservedAppointmentNo || "",
+          reused: true,
+        });
+      }
+
+      if (existingStripeSession.status === "expired") {
+        reusableSession.status = "failed";
+        await reusableSession.save();
+      }
     }
 
     const user = await userModel.findById(req.user.id).select("name email phone");
@@ -362,7 +466,7 @@ export const initiateAppointmentPayment = async (req, res) => {
 
     let reservedAppointmentNo = "";
     if (!isChatConsultation) {
-      reservedAppointmentNo = await getNextAppointmentNo(doctorId, date);
+      reservedAppointmentNo = await getNextAppointmentNo(doctorId, date, time, type);
       if (!reservedAppointmentNo) {
         return res.status(400).json({ message: "Appointment numbers are full (1-100)" });
       }
@@ -416,6 +520,7 @@ export const initiateAppointmentPayment = async (req, res) => {
       orderId: session.orderId,
       sessionId: stripeSession.id,
       checkoutUrl: stripeSession.url,
+      reservedAppointmentNo: session.reservedAppointmentNo || "",
     });
   } catch (error) {
     return res.status(500).json({ message: error.message || "Failed to initialize appointment payment" });
@@ -454,6 +559,7 @@ export const verifyStripeSession = async (req, res) => {
 
     await session.save();
     await sendAppointmentPaymentEmailsIfNeeded(session);
+    await sendDonationPaymentEmailIfNeeded(session);
 
     session = await paymentSessionModel
       .findById(session._id)

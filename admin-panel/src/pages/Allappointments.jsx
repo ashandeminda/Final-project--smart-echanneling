@@ -2,6 +2,10 @@ import { useEffect, useState } from "react";
 import toast from "react-hot-toast";
 import api from "../api/axios";
 import Layout from "../components/Layout";
+import { formatDisplayTime } from "../utils/timeFormat";
+
+const isTelemedicineAppointment = (appointment) =>
+  appointment?.type === "Video Consultation" || appointment?.type === "Chat Consultation";
 
 const AllAppointments = () => {
   const [appointments, setAppointments] = useState([]);
@@ -106,6 +110,105 @@ const AllAppointments = () => {
     fetchAppointments();
   }, []);
 
+  const physicalAppointments = appointments.filter(
+    (appointment) => !isTelemedicineAppointment(appointment)
+  );
+  const telemedicineAppointments = appointments.filter(isTelemedicineAppointment);
+
+  const renderTable = (items, emptyMessage) => {
+    if (!items.length) {
+      return <div className="p-8 text-center text-gray-500 font-medium">{emptyMessage}</div>;
+    }
+
+    return (
+      <div className="overflow-x-auto">
+        <table className="w-full whitespace-nowrap">
+          <thead>
+            <tr className="bg-gray-50 border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
+              <th className="px-6 py-4">#</th>
+              <th className="px-6 py-4">Appointment No</th>
+              <th className="px-6 py-4">Patient</th>
+              <th className="px-6 py-4">Doctor</th>
+              <th className="px-6 py-4">Date</th>
+              <th className="px-6 py-4">Time</th>
+              <th className="px-6 py-4">Type</th>
+              <th className="px-6 py-4">Status</th>
+              <th className="px-6 py-4 text-right">Actions</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y divide-gray-100 text-sm">
+            {items.map((appointment, index) => (
+              <tr key={appointment._id} className="hover:bg-blue-50/40 transition-colors">
+                <td className="px-6 py-4 text-gray-400 font-medium">{index + 1}</td>
+                <td className="px-6 py-4 font-bold text-gray-800">{appointment.appointmentNo || "N/A"}</td>
+                <td className="px-6 py-4 font-medium text-gray-900">{appointment.userId?.name || "N/A"}</td>
+                <td className="px-6 py-4 text-gray-600">{appointment.doctorId?.name || "N/A"}</td>
+                <td className="px-6 py-4 text-gray-600">{appointment.date}</td>
+                <td className="px-6 py-4 text-gray-600">{formatDisplayTime(appointment.time)}</td>
+                <td className="px-6 py-4">
+                  <span className={`inline-flex px-3 py-1 rounded-full text-xs font-bold border ${
+                    isTelemedicineAppointment(appointment)
+                      ? "bg-blue-50 text-blue-700 border-blue-100"
+                      : "bg-emerald-50 text-emerald-700 border-emerald-100"
+                  }`}>
+                    {appointment.type || "In-Person"}
+                  </span>
+                </td>
+                <td className="px-6 py-4">
+                  <span
+                    className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${
+                      appointment.status === "approved"
+                        ? "bg-emerald-100 text-emerald-700"
+                        : appointment.status === "rejected" || appointment.status === "cancelled"
+                          ? "bg-rose-100 text-rose-700"
+                          : "bg-amber-100 text-amber-700"
+                    }`}
+                  >
+                    {appointment.status}
+                  </span>
+                </td>
+                <td className="px-6 py-4 text-right gap-2 flex justify-end">
+                  <button
+                    className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300"
+                    onClick={() => viewHealthRecords(appointment)}
+                  >
+                    Health Records
+                  </button>
+                  {appointment.status === "pending" ? (
+                    <>
+                      <button
+                        className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm disabled:opacity-50 hover:-translate-y-0.5"
+                        disabled={updatingId === appointment._id}
+                        onClick={() => updateStatus(appointment._id, "approved")}
+                      >
+                        {updatingId === appointment._id ? "..." : "Approve"}
+                      </button>
+                      <button
+                        className="bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 disabled:opacity-50 border border-rose-200"
+                        disabled={updatingId === appointment._id}
+                        onClick={() => updateStatus(appointment._id, "rejected")}
+                      >
+                        {updatingId === appointment._id ? "..." : "Reject"}
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      className="bg-white border border-gray-200 text-rose-600 hover:bg-rose-50 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 disabled:opacity-50 hover:border-rose-200"
+                      disabled={deletingId === appointment._id}
+                      onClick={() => deleteAppointment(appointment._id)}
+                    >
+                      {deletingId === appointment._id ? "..." : "Delete"}
+                    </button>
+                  )}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    );
+  };
+
   return (
     <Layout>
       <div className="w-full">
@@ -123,81 +226,31 @@ const AllAppointments = () => {
             <p className="text-gray-500 text-lg font-medium">No appointments found</p>
           </div>
         ) : (
-          <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full whitespace-nowrap">
-                <thead>
-                  <tr className="bg-gray-50 border-b border-gray-100 text-left text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                    <th className="px-6 py-4">#</th>
-                    <th className="px-6 py-4">Appointment No</th>
-                    <th className="px-6 py-4">Patient</th>
-                    <th className="px-6 py-4">Doctor</th>
-                    <th className="px-6 py-4">Date</th>
-                    <th className="px-6 py-4">Time</th>
-                    <th className="px-6 py-4">Status</th>
-                    <th className="px-6 py-4 text-right">Actions</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-100 text-sm">
-                  {appointments.map((appointment, index) => (
-                    <tr key={appointment._id} className="hover:bg-blue-50/40 transition-colors">
-                      <td className="px-6 py-4 text-gray-400 font-medium">{index + 1}</td>
-                      <td className="px-6 py-4 font-bold text-gray-800">{appointment.appointmentNo || "N/A"}</td>
-                      <td className="px-6 py-4 font-medium text-gray-900">{appointment.userId?.name || "N/A"}</td>
-                      <td className="px-6 py-4 text-gray-600">{appointment.doctorId?.name || "N/A"}</td>
-                      <td className="px-6 py-4 text-gray-600">{appointment.date}</td>
-                      <td className="px-6 py-4 text-gray-600">{appointment.time}</td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex px-3 py-1 rounded-full text-xs font-bold uppercase tracking-wider ${appointment.status === "approved"
-                              ? "bg-emerald-100 text-emerald-700"
-                              : appointment.status === "rejected" ||
-                                appointment.status === "cancelled"
-                                ? "bg-rose-100 text-rose-700"
-                                : "bg-amber-100 text-amber-700"
-                            }`}
-                        >
-                          {appointment.status}
-                        </span>
-                      </td>
-                      <td className="px-6 py-4 text-right gap-2 flex justify-end">
-                        <button
-                          className="bg-white border border-gray-200 text-gray-700 hover:bg-gray-50 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300"
-                          onClick={() => viewHealthRecords(appointment)}
-                        >
-                          Health Records
-                        </button>
-                        {appointment.status === "pending" ? (
-                          <>
-                            <button
-                              className="bg-emerald-500 hover:bg-emerald-600 text-white px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 shadow-sm disabled:opacity-50 hover:-translate-y-0.5"
-                              disabled={updatingId === appointment._id}
-                              onClick={() => updateStatus(appointment._id, "approved")}
-                            >
-                              {updatingId === appointment._id ? "..." : "Approve"}
-                            </button>
-                            <button
-                              className="bg-rose-50 hover:bg-rose-100 text-rose-600 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 disabled:opacity-50 border border-rose-200"
-                              disabled={updatingId === appointment._id}
-                              onClick={() => updateStatus(appointment._id, "rejected")}
-                            >
-                              {updatingId === appointment._id ? "..." : "Reject"}
-                            </button>
-                          </>
-                        ) : (
-                          <button
-                            className="bg-white border border-gray-200 text-rose-600 hover:bg-rose-50 px-4 py-1.5 rounded-full text-xs font-bold transition-all duration-300 disabled:opacity-50 hover:border-rose-200"
-                            disabled={deletingId === appointment._id}
-                            onClick={() => deleteAppointment(appointment._id)}
-                          >
-                            {deletingId === appointment._id ? "..." : "Delete"}
-                          </button>
-                        )}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+          <div className="space-y-6">
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                <div>
+                  <h5 className="text-lg font-bold text-gray-900">Physical Appointments</h5>
+                  <p className="text-sm text-gray-500">In-person hospital bookings.</p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 text-xs font-bold border border-emerald-100">
+                  {physicalAppointments.length} Total
+                </span>
+              </div>
+              {renderTable(physicalAppointments, "No physical appointments found.")}
+            </div>
+
+            <div className="bg-white rounded-3xl shadow-sm border border-gray-100 overflow-hidden">
+              <div className="px-6 py-5 border-b border-gray-100 flex items-center justify-between gap-4">
+                <div>
+                  <h5 className="text-lg font-bold text-gray-900">Telemedicine Appointments</h5>
+                  <p className="text-sm text-gray-500">Video and chat consultations.</p>
+                </div>
+                <span className="px-3 py-1 rounded-full bg-blue-50 text-blue-700 text-xs font-bold border border-blue-100">
+                  {telemedicineAppointments.length} Total
+                </span>
+              </div>
+              {renderTable(telemedicineAppointments, "No telemedicine appointments found.")}
             </div>
           </div>
         )}
